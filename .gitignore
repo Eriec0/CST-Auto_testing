@@ -1,0 +1,42 @@
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+cst_env/
+venv/
+.venv/
+env/
+*.egg-info/
+.pytest_cache/
+
+# ===== CST Studio Suite - arsip percobaan lama (tidak dipakai) =====
+AntenaMicrostrip/
+AntenaMicrostrips/
+MicrostripAntena/
+microstrip_antena/
+Desain antena/
+result test/
+batch_results/
+bin/
+
+# File cache CST
+*.cst.bak
+*.cst.lock
+*.mod
+*.par
+*.dbm
+
+# ===== File temporary di export/ =====
+export/**/*.tmp
+export/**/~$*
+export/**/*.bak
+export/**/*.swp
+
+# ===== OS / Editor =====
+Thumbs.db
+.DS_Store
+.vscode/
+.idea/
+*.swp
