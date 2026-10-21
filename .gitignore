@@ -12,14 +12,15 @@ env/
 .pytest_cache/
 
 # ===== CST Studio Suite - arsip percobaan lama (tidak dipakai) =====
-AntenaMicrostrip/
-AntenaMicrostrips/
-MicrostripAntena/
-microstrip_antena/
-Desain antena/
-result test/
-batch_results/
-bin/
+# Leading slash = hanya match di root, BUKAN di sub-folder
+/AntenaMicrostrip/
+/AntenaMicrostrips/
+/MicrostripAntena/
+/microstrip_antena/
+/Desain antena/
+/result test/
+/batch_results/
+/bin/
 
 # File cache CST
 *.cst.bak
