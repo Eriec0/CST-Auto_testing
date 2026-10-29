@@ -65,10 +65,16 @@ def main():
     ap.add_argument("--spread", type=float, default=0.3,
                     help="jarak minimum antar kandidat dalam satu batch (ruang satuan; 0 = tanpa batas)")
     ap.add_argument("--report", action="store_true")
+    ap.add_argument("--stage", type=int, default=None,
+                    help="paksa tahap BO (1, 2, ...); default: dipilih otomatis dari data")
     args = ap.parse_args()
 
     d = mc.load_design(args.design)
+    if args.stage is not None:
+        d.force_stage = args.stage - 1
     df = mc.load_dataset(d)
+    mode = "dipaksa" if args.stage is not None else "otomatis"
+    print(f"Tahap BO: {d.stage_idx + 1}/{len(d.stages)} ({d.stage_name}, {mode})")
     print(f"Desain: {d.name} | {len(df)} sampel | objective: {d.objective['goal']} "
           f"{d.objective['column']} | constraint: "
           f"{[(c['column'], c['op'], c['value']) for c in d.constraints]}")

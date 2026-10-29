@@ -41,10 +41,15 @@ def main():
     ap.add_argument("--restarts", type=int, default=2)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--xi", type=float, default=0.01)
+    ap.add_argument("--stage", type=int, default=None,
+                    help="paksa tahap BO (1, 2, ...); default: dipilih otomatis dari data")
     args = ap.parse_args()
 
     d = mc.load_design(args.design)
+    if args.stage is not None:
+        d.force_stage = args.stage - 1
     df = mc.load_dataset(d)
+    print(f"Tahap BO: {d.stage_idx + 1}/{len(d.stages)} ({d.stage_name})")
     oc = d.objective["column"]
     n = len(df)
     steps = min(args.steps, n - args.n0)

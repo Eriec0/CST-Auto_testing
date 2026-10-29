@@ -46,28 +46,32 @@ TARGETS = ["fr_ghz", "rl_min_db", "bw_mhz", "s11_at_f0_db", "d_peak_dbi", "d_pea
 # Transformasi untuk target yang distribusinya miring/banyak nol (hanya untuk TARGETS non-objective)
 TRANSFORMS = {"bw_mhz": "log1p"}
 
-# ---------------------------------------------------------------- objective & constraint
-# TAHAP 1 (default): rl_band_min_db = S11 TERBAIK di dalam pita 3,3-3,7 GHz (makin negatif makin baik).
-# Nilainya selalu terdefinisi dan membaik mulus saat dip resonansi bergerak ke dalam pita, jadi
-# GPR punya gradien untuk dipelajari (BW langsung = 0 untuk sebagian besar sampel, sehingga datar).
-OBJECTIVE = {"column": "rl_band_min_db", "goal": "min"}
-
-# Constraint = daftar syarat feasibility. CONTOH/PLACEHOLDER: sesuaikan dengan spesifikasi Anda.
-# d_peak_fr_dbi = directivity di monitor terdekat frekuensi resonansi (penjaga pola radiasi).
-# Gain (gain_fr_ieee_dbi) kini valid karena efisiensi diukur di banyak frekuensi, tetapi target
-# >= 5 dBi untuk satu patch FR-4 sulit tercapai; tentukan batas gain bersama pembimbing sebelum memakainya.
-CONSTRAINTS = [
-    {"column": "d_peak_fr_dbi", "op": ">=", "value": 4.0},
-]
-
-# TAHAP 2 (setelah ada sampel dengan rl_band_min_db <= -10): maksimalkan bandwidth, dengan
-# resonansi di dalam pita dan pencocokan terpenuhi. Ganti OBJECTIVE dan CONSTRAINTS menjadi:
+# ---------------------------------------------------------------- tahap BO (objective & constraint)
+# BO berjalan dalam TAHAP. Tahap aktif dipilih OTOMATIS dari data: tetap di tahap sekarang sampai
+# ada minimal satu sampel yang memenuhi constraint tahap berikutnya, lalu pindah ke sana.
+# Paksa tahap tertentu dengan  --stage N  (1 = tahap 1, 2 = tahap 2) di bo_suggest.py / bo_backtest.py.
 #
-# OBJECTIVE = {"column": "bw_mhz", "goal": "max"}      # (objective tidak boleh di-TRANSFORMS)
-# CONSTRAINTS = [
-#     {"column": "fr_ghz",         "op": ">=", "value": 3.3},
-#     {"column": "fr_ghz",         "op": "<=", "value": 3.7},
-#     {"column": "rl_band_min_db", "op": "<=", "value": -10.0},
-#     {"column": "d_peak_fr_dbi",  "op": ">=", "value": 4.0},
-# ]
-# dan hapus "bw_mhz" dari TRANSFORMS.
+# TAHAP 1: rl_band_min_db = S11 TERBAIK di dalam pita 3,3-3,7 GHz (makin negatif makin baik).
+#   Nilainya selalu terdefinisi dan membaik mulus saat dip resonansi bergerak ke dalam pita, jadi
+#   GPR punya gradien untuk dipelajari (BW langsung = 0 untuk sebagian besar sampel, sehingga datar).
+#   d_peak_fr_dbi = directivity di monitor terdekat frekuensi resonansi (penjaga pola radiasi).
+#   Gain (gain_fr_ieee_dbi) sengaja tidak dipakai sebagai constraint: >= 5 dBi untuk satu patch FR-4
+#   sulit tercapai (efisiensi radiasi di fr hanya sekitar 0,3-0,4); tentukan batasnya bersama pembimbing.
+# TAHAP 2: maksimalkan bandwidth dengan resonansi di dalam pita dan pencocokan terpenuhi.
+STAGES = [
+    {"name": "tahap1_match",
+     "objective": {"column": "rl_band_min_db", "goal": "min"},
+     "constraints": [
+         {"column": "d_peak_fr_dbi", "op": ">=", "value": 4.0},
+     ]},
+    {"name": "tahap2_bandwidth",
+     "objective": {"column": "bw_mhz", "goal": "max"},
+     "constraints": [
+         {"column": "fr_ghz",         "op": ">=", "value": 3.3},
+         {"column": "fr_ghz",         "op": "<=", "value": 3.7},
+         {"column": "rl_band_min_db", "op": "<=", "value": RL_LIMIT_DB},
+         {"column": "d_peak_fr_dbi",  "op": ">=", "value": 4.0},
+     ]},
+    # Syarat pindah tahap 1 -> 2 (default = constraint tahap 2) bisa diganti per tahap dengan
+    # kunci "advance_when": [ ...daftar constraint... ].
+]

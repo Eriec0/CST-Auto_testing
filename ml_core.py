@@ -11,6 +11,10 @@ Isi:
   - fit_gp / fit_models      : GPR (scikit-learn) dengan kernel ARD, input dinormalisasi ke [0,1]
   - acquisition              : Expected Improvement x Probability of Feasibility (constrained EI)
   - suggest                  : memilih q titik berikutnya (batch, Kriging believer)
+
+Tahap (STAGES): objective dan constraint bisa didefinisikan sebagai daftar tahap di file desain.
+Tahap aktif dipilih OTOMATIS dari data: BO tetap di tahap sekarang sampai ada minimal satu sampel
+yang memenuhi constraint tahap berikutnya (atau 'advance_when'), lalu pindah ke tahap itu.
 """
 import importlib
 import os
@@ -34,10 +38,12 @@ TRANSFORMS = {"none": (lambda y: y, lambda y: y),
 class Design:
     """Pembungkus modul konfigurasi desain."""
 
-    REQUIRED = ["NAME", "PARAM_NAMES", "BOUNDS", "DATASET_CSV", "OBJECTIVE", "CONSTRAINTS", "TARGETS"]
+    REQUIRED = ["NAME", "PARAM_NAMES", "BOUNDS", "DATASET_CSV", "TARGETS"]
 
     def __init__(self, mod):
         miss = [k for k in self.REQUIRED if not hasattr(mod, k)]
+        if not hasattr(mod, "STAGES"):
+            miss += [k for k in ("OBJECTIVE", "CONSTRAINTS") if not hasattr(mod, k)]
         if miss:
             raise AttributeError(f"Konfigurasi desain '{mod.__name__}' belum punya: {miss}")
         self.mod = mod
@@ -51,24 +57,61 @@ class Design:
         self.candidates = getattr(mod, "CANDIDATES_CSV",
                                   os.path.join(os.path.dirname(mod.DATASET_CSV), "bo_candidates.csv"))
         self.n_initial = getattr(mod, "N_INITIAL", 0)
-        self.objective = dict(mod.OBJECTIVE)
-        self.constraints = [dict(c) for c in mod.CONSTRAINTS]
-        self.transforms = dict(getattr(mod, "TRANSFORMS", {}))
+        self.base_transforms = dict(getattr(mod, "TRANSFORMS", {}))
         self.is_valid = getattr(mod, "is_valid", lambda p: True)
         self.band = getattr(mod, "BAND_GHZ", None)
         self.curves_dir = getattr(mod, "CURVES_DIR", None)
         self.curve_file = getattr(mod, "CURVE_FILE", "s11_sample{sid}.csv")
+        self.targets = list(mod.TARGETS)
 
-        if self.objective["goal"] not in ("min", "max"):
-            raise ValueError("OBJECTIVE['goal'] harus 'min' atau 'max'")
-        if self.objective["column"] in self.transforms:
-            raise ValueError("Objective tidak boleh diberi TRANSFORMS (EI dihitung di ruang aslinya).")
-        for c in self.constraints:
-            if c["op"] not in (">=", "<="):
-                raise ValueError("op constraint harus '>=' atau '<='")
-        cols = list(mod.TARGETS) + [self.objective["column"]] + [c["column"] for c in self.constraints]
+        if hasattr(mod, "STAGES"):
+            self.stages = [dict(st) for st in mod.STAGES]
+        else:
+            self.stages = [{"name": "tunggal", "objective": mod.OBJECTIVE, "constraints": mod.CONSTRAINTS}]
+        if not self.stages:
+            raise ValueError("STAGES tidak boleh kosong")
+        for st in self.stages:
+            if st["objective"]["goal"] not in ("min", "max"):
+                raise ValueError("OBJECTIVE['goal'] harus 'min' atau 'max'")
+            for c in st["constraints"]:
+                if c["op"] not in (">=", "<="):
+                    raise ValueError("op constraint harus '>=' atau '<='")
+        self.force_stage = None      # isi dengan indeks (0,1,..) untuk memaksa tahap tertentu
+        self.stage_idx = 0
+        self._load_stage(0)
+
+    # --- tahap
+    def _load_stage(self, i):
+        st = self.stages[i]
+        self.stage_idx = i
+        self.stage_name = st.get("name", f"tahap{i + 1}")
+        self.objective = dict(st["objective"])
+        self.constraints = [dict(c) for c in st["constraints"]]
+        # EI dihitung di ruang asli objective, jadi objective tidak boleh ditransformasi
+        self.transforms = {k: v for k, v in self.base_transforms.items()
+                           if k != self.objective["column"]}
+        cols = list(self.targets) + [self.objective["column"]] + [c["column"] for c in self.constraints]
         self.model_columns = list(dict.fromkeys(cols))
         self.sign = 1.0 if self.objective["goal"] == "max" else -1.0
+
+    def activate(self, df):
+        """Pilih tahap aktif dari data. Maju ke tahap berikutnya bila sudah ada sampel yang memenuhi
+        'advance_when' (default: constraint tahap berikutnya). Mengembalikan indeks tahap."""
+        if self.force_stage is not None:
+            i = int(self.force_stage)
+            if not 0 <= i < len(self.stages):
+                raise ValueError(f"--stage di luar jangkauan (1..{len(self.stages)})")
+        else:
+            i = 0
+            while i < len(self.stages) - 1:
+                cond = self.stages[i].get("advance_when", self.stages[i + 1]["constraints"])
+                if any(c["column"] not in df.columns for c in cond):
+                    break
+                if not feasible_mask(self, df, cond).any():
+                    break
+                i += 1
+        self._load_stage(i)
+        return i
 
     # --- skala
     def to_unit(self, P):
@@ -87,16 +130,30 @@ def load_design(name):
 
 
 # ================================================================ dataset
-def s11_features(f, s_db, band, limit=-10.0):
-    """Fitur kontinu dari kurva S11 (selalu terdefinisi, tidak 'nol-menggelembung')."""
+def s11_features(f, s_db, band, limit=-10.0, dip_db=-6.0):
+    """Fitur kontinu dari kurva S11 (selalu terdefinisi, tidak 'nol-menggelembung').
+
+    rl_band_*      : statistik S11 di dalam pita (min = terbaik, makin negatif makin baik)
+    n_dips         : jumlah dip (minimum lokal) dengan S11 <= dip_db
+    dip_dist_ghz   : jarak (GHz) dari dip terdekat ke pita; 0 bila ada dip di dalam pita.
+                     Bila tidak ada dip <= dip_db, titik minimum global kurva dipakai sebagai dip.
+    dip_nearest_db : S11 (dB) di dip terdekat tersebut (bila jarak sama, dip yang lebih dalam).
+    """
     grid = np.linspace(band[0], band[1], 401)
     sb = np.interp(grid, f, s_db)
     inner = s_db[1:-1]
-    dips = np.where((inner < s_db[:-2]) & (inner <= s_db[2:]) & (inner <= -6.0))[0] + 1
-    return {"rl_band_min_db": float(sb.min()),      # S11 TERBAIK di dalam pita (makin negatif makin baik)
+    mins = np.where((inner < s_db[:-2]) & (inner <= s_db[2:]))[0] + 1
+    dips = mins[s_db[mins] <= dip_db]
+    cand = dips if len(dips) else np.array([int(np.argmin(s_db))])
+    dist = np.maximum(np.maximum(band[0] - f[cand], f[cand] - band[1]), 0.0)
+    order = np.lexsort((s_db[cand], dist))          # jarak terkecil, lalu paling dalam
+    k = cand[order[0]]
+    return {"rl_band_min_db": float(sb.min()),      # S11 TERBAIK di dalam pita
             "rl_band_max_db": float(sb.max()),      # S11 terburuk di dalam pita (datar bila pita >> BW antena)
             "rl_band_mean_db": float(sb.mean()),
-            "n_dips": int(len(dips))}
+            "n_dips": int(len(dips)),
+            "dip_dist_ghz": float(dist[order[0]]),
+            "dip_nearest_db": float(s_db[k])}
 
 
 def add_s11_features(df, d):
@@ -124,6 +181,7 @@ def load_dataset(d):
     df = df.sort_values(d.id_col).reset_index(drop=True)
     if d.band is not None and d.curves_dir:
         df = add_s11_features(df, d)
+    d.activate(df)                       # pilih tahap BO aktif dari data (atau d.force_stage)
     need = [c for c in d.model_columns if c not in df.columns]
     if need:
         raise ValueError(f"Kolom target tidak ada di dataset: {need}. "
@@ -192,9 +250,9 @@ def fit_models(d, df, columns, kind="rbf", n_restarts=5, seed=0):
 
 
 # ================================================================ BO
-def feasible_mask(d, df):
+def feasible_mask(d, df, constraints=None):
     ok = np.ones(len(df), bool)
-    for c in d.constraints:
+    for c in (d.constraints if constraints is None else constraints):
         v = df[c["column"]].values.astype(float)
         ok &= np.isfinite(v) & ((v >= c["value"]) if c["op"] == ">=" else (v <= c["value"]))
     return ok
