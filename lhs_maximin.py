@@ -40,15 +40,15 @@ PARAM_NAMES = ["Lp", "Wp", "LU", "WU", "gU", "PU", "LI", "LD", "WD", "gD", "PD"]
 # Lp digeser ke atas karena resonansi baseline (3,99 GHz) berada di atas 3,5 GHz
 # (percobaan Anda sebelumnya bergerak ke Lp ~ 20,8). SESUAIKAN bila perlu.
 BOUNDS = {
-    "Lp": (18.0, 25.0),   # baseline 20.22 | diperlebar (semula 20-23): BO menumpuk di 23, seed terskala 18-24,5
+    "Lp": (15.0, 25.0),   # baseline 20.22 | diperlebar (semula 20-23, lalu 18-25): desain BW tertinggi menempel di 18
     "Wp": (22.0, 31.0),   # baseline 26.33 | diperlebar (semula 24-29)
-    "LU": (5.0, 12.0),    # baseline 10.0  | diperlebar (semula 6-10,5)
-    "WU": (6.0, 13.0),    # baseline 10.5  | batas bawah 7 -> 6 (seed terskala butuh 6,1-6,6)
+    "LU": (3.0, 12.0),    # baseline 10.0  | diperlebar (semula 6-10,5, lalu 5-12): desain BW tertinggi menempel di 5
+    "WU": (4.5, 13.0),    # baseline 10.5  | batas bawah 7 -> 6 -> 4,5: desain BW tertinggi menempel di 6
     "gU": (0.4, 1.2),     # baseline 0.6
     "PU": (-1.0, 3.5),    # baseline 2.0
     "LI": (4.5, 7.0),     # baseline 6.15
     "LD": (1.0, 5.0),     # baseline 3.0   | batas bawah 2 -> 1 (semua kandidat BO menempel di 2)
-    "WD": (2.0, 6.0),     # baseline 3.0   | batas atas 5 -> 6
+    "WD": (2.0, 8.0),     # baseline 3.0   | batas atas 5 -> 6 -> 8: desain BW tertinggi menempel di 6 (Ws = Wp+6*hs, aman)
     "gD": (0.2, 1.0),     # baseline 0.3
     "PD": (-3.0, 3.0),    # baseline 0.0
 }

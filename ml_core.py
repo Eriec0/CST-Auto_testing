@@ -392,3 +392,32 @@ def convergence(d, df):
             cur = y[i]
         best.append(cur)
     return np.array(best)
+
+
+# ---------------------------------------------------------------- peringatan batas parameter
+def edge_hits(d, X, edge=0.05, frac=0.6):
+    """Parameter yang menempel batas pada >= frac dari baris X (nilai asli, kolom = d.params).
+    Kembalikan daftar (nama, 'bawah'|'atas', jumlah, n, nilai batas)."""
+    X = np.atleast_2d(np.asarray(X, float))
+    n = len(X)
+    if n < 3:
+        return []
+    U = d.to_unit(X)
+    hits = []
+    for j, p in enumerate(d.params):
+        lo_n, hi_n = int((U[:, j] < edge).sum()), int((U[:, j] > 1 - edge).sum())
+        if lo_n >= frac * n:
+            hits.append((p, "bawah", lo_n, n, float(d.lo[j])))
+        elif hi_n >= frac * n:
+            hits.append((p, "atas", hi_n, n, float(d.hi[j])))
+    return hits
+
+
+def bound_hits(d, df, k=10, edge=0.05, frac=0.6):
+    """Cek k desain terbaik (yang feasible bila ada) terhadap batas parameter."""
+    oc = d.objective["column"]
+    ok = feasible_mask(d, df)
+    pool = (df[ok] if ok.any() else df).dropna(subset=[oc])
+    pool = pool.sort_values(oc, ascending=(d.objective["goal"] == "min")).head(k)
+    return edge_hits(d, pool[d.params].values, edge, frac)
+

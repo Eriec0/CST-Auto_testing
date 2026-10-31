@@ -33,7 +33,7 @@ def is_valid(params):
 
 
 # ---------------------------------------------------------------- target pemodelan
-BAND_GHZ = (3.3, 3.7)    # pita yang diinginkan; dipakai untuk fitur turunan dari kurva S11
+BAND_GHZ = (3.3, 3.7)    # SATU-SATUNYA tempat mengubah pita: dipakai fitur kurva S11 dan constraint fr tahap 2
 RL_LIMIT_DB = -10.0
 
 # Kolom dataset yang dimodelkan GPR. Kolom turunan (rl_band_*, dip_dist_ghz, dip_nearest_db, n_dips)
@@ -67,8 +67,8 @@ STAGES = [
     {"name": "tahap2_bandwidth",
      "objective": {"column": "bw_mhz", "goal": "max"},
      "constraints": [
-         {"column": "fr_ghz",         "op": ">=", "value": 3.3},
-         {"column": "fr_ghz",         "op": "<=", "value": 3.7},
+         {"column": "fr_ghz",         "op": ">=", "value": BAND_GHZ[0]},   # batas pita hanya di BAND_GHZ
+         {"column": "fr_ghz",         "op": "<=", "value": BAND_GHZ[1]},
          {"column": "rl_band_min_db", "op": "<=", "value": RL_LIMIT_DB},
          {"column": "d_peak_fr_dbi",  "op": ">=", "value": 4.0},
      ]},

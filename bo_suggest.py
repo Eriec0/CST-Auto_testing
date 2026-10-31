@@ -4,7 +4,7 @@ Satu iterasi Constrained Bayesian Optimization (GPR + Expected Improvement x Pro
 Alur satu iterasi (simulasi CST tetap dijalankan oleh batch_trials.py):
 
   1.  py bo_suggest.py -q 5                     -> export/bo_candidates.csv  (+ laporan prediksi)
-  2.  py batch_trial_LHS.py --samples export/bo_candidates.csv --auto-yes
+  2.  py batch_trials.py --samples export/bo_candidates.csv --auto-yes
   3.  ulangi dari langkah 1  (data baru otomatis ikut melatih ulang GPR)
 
 Opsi lain:
@@ -53,6 +53,15 @@ def report(d, df):
     print(f"Gambar: {path}")
 
 
+def warn_hits(hits, subjek):
+    """Cetak peringatan bila parameter menempel batas rentang."""
+    if not hits:
+        return
+    daftar = ", ".join(f"{p} ({sisi}, {n_hit}/{n}, batas {v:g})" for p, sisi, n_hit, n, v in hits)
+    print(f"[peringatan] Parameter menempel batas pada {subjek}: {daftar}")
+    print("             Optimum mungkin di luar rentang. Pertimbangkan memperlebar BOUNDS (sampel lama tetap valid).")
+
+
 def main():
     ap = argparse.ArgumentParser(description="Usulkan kandidat berikutnya dengan Constrained BO")
     ap.add_argument("--design", default="design_uslot_dgs")
@@ -80,6 +89,7 @@ def main():
           f"{[(c['column'], c['op'], c['value']) for c in d.constraints]}")
     n_feas = int(mc.feasible_mask(d, df).sum())
     print(f"Sampel yang memenuhi semua constraint: {n_feas}/{len(df)}")
+    warn_hits(mc.bound_hits(d, df), "desain terbaik")
 
     if args.report:
         report(d, df)
@@ -101,14 +111,15 @@ def main():
     rep.to_csv(rep_path, index=False)
 
     oc = d.objective["column"]
-    show = [d.id_col, "acq", "pof", f"pred_{oc}", f"std_{oc}"] + \
-        [f"pred_{c['column']}" for c in d.constraints if c["column"] != oc]
+    extra = [c for c in dict.fromkeys(c["column"] for c in d.constraints) if c != oc]   # tanpa duplikat
+    show = [d.id_col, "acq", "pof", f"pred_{oc}", f"std_{oc}"] + [f"pred_{c}" for c in extra]
     pd.set_option("display.width", 200)
     print(f"\n{len(cand)} kandidat disimpan: {d.candidates}")
     print(rep[show].round(4).to_string(index=False))
+    warn_hits(mc.edge_hits(d, cand[d.params].values), "kandidat BO ini")
     print(f"\nLaporan lengkap (prediksi mean/std semua target): {rep_path}")
     print("\nLangkah berikutnya:")
-    print(f"  py batch_trial_LHS.py --samples \"{d.candidates}\" --auto-yes")
+    print(f"  py batch_trials.py --samples \"{d.candidates}\" --auto-yes")
 
 
 if __name__ == "__main__":
