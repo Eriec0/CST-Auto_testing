@@ -29,11 +29,11 @@ env/
 *.par
 *.dbm
 
-# ===== File temporary di export/ =====
-export/**/*.tmp
-export/**/~$*
-export/**/*.bak
-export/**/*.swp
+# ===== File temporary di data/ =====
+data/**/*.tmp
+data/**/~$*
+data/**/*.bak
+data/**/*.swp
 
 # ===== OS / Editor =====
 Thumbs.db
@@ -41,3 +41,8 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+
+# ===== Tata letak baru =====
+# folder pendamping project CST di cst_projects/ (hasil simulasi, besar)
+/cst_projects/*/
+data/**/*.lock

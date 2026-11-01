@@ -1,0 +1,8 @@
+# Tambahan khusus untuk menjalankan simulasi CST (hanya Windows dengan CST Studio Suite):
+#   pip install -r requirements-cst.txt
+-r requirements.txt
+cst-studio-suite-link==2024.0.1160397.368 ; sys_platform == "win32"
+comtypes==1.4.17 ; sys_platform == "win32"
+pywin32==312 ; sys_platform == "win32"
+pywinauto==0.6.9 ; sys_platform == "win32"
+cloudpickle==3.1.2 ; sys_platform == "win32"
