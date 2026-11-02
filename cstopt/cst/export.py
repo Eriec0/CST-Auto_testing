@@ -59,6 +59,20 @@ FIELDS = (["sample_id", "run_id", "timestamp"] + PARAM_NAMES + [
 # =========================================================
 
 
+def set_extra_params(names):
+    """Tambahkan parameter CST ekstra (mis. hs, Wf) ke PARAM_NAMES dan FIELDS, di tempat (in place).
+
+    Untuk eksperimen yang ikut mengubah parameter di luar 11 parameter geometri, misalnya tebal substrat.
+    Kolom ekstra muncul tepat setelah kolom parameter di CSV hasil. Aman dipanggil berulang.
+    """
+    for n in names:
+        if n in PARAM_NAMES:
+            continue
+        idx = FIELDS.index(PARAM_NAMES[-1]) + 1
+        PARAM_NAMES.append(n)
+        FIELDS.insert(idx, n)
+
+
 # ---------------------------------------------------------------- monitor
 def _r4(x):
     return int(x * 10000 + 0.5) / 10000
