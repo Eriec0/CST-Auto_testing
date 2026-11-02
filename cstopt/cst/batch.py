@@ -69,6 +69,26 @@ REQUIRED = ["StoreDoubleParameter", "full_history_rebuild", "SelectTreeItem",
 
 
 # ---------------------------------------------------------------- sampel LHS
+BASE_EXTRA = {"hs": 1.6, "Wf": 3.11}      # baseline parameter ekstra (dipakai untuk mengembalikan model setelah batch)
+
+
+def activate_extras(names):
+    """Aktifkan parameter ekstra (mis. hs, Wf): ikut dibaca dari CSV sampel, diset ke CST, dan ditulis ke CSV hasil."""
+    new = [n for n in names if n not in ed.PARAM_NAMES]
+    if new:
+        ed.set_extra_params(new)
+        BASE.update({k: BASE_EXTRA[k] for k in new})      # model dikembalikan ke baseline lengkap di akhir batch
+        print(f"Parameter ekstra aktif: {new}")
+
+
+def detect_extras(path):
+    """Kolom hs/Wf di CSV sampel otomatis dipakai sebagai parameter ekstra (mencegah kolom itu diabaikan diam diam)."""
+    if path and os.path.exists(path):
+        with open(path, newline="", encoding="utf-8") as fh:
+            header = next(csv.reader(fh), [])
+        activate_extras([k for k in BASE_EXTRA if k in header])
+
+
 def load_samples(path):
     """Baca CSV sampel. Kembalikan list (sample_id, dict parameter float)."""
     if not os.path.exists(path):
@@ -389,6 +409,9 @@ def main():
     ap.add_argument("--limit", type=int, default=0, help="jalankan maksimal N sampel (0 = semua)")
     ap.add_argument("--auto-yes", action="store_true",
                     help="tekan otomatis tombol Yes pada dialog CST selama batch (butuh pywinauto)")
+    ap.add_argument("--extra-params", default="",
+                    help="parameter CST tambahan dipisah koma (mis. hs,Wf untuk tebal substrat). Kolom hs/Wf di CSV "
+                         "sampel terdeteksi otomatis. Pakai --run-name agar hasil tidak tercampur dengan dataset utama")
     ap.add_argument("--reuse-results", action="store_true",
                     help="jika CST sudah punya hasil untuk parameter yang sama, pakai itu (lewati solver)")
     ap.add_argument("--probe", action="store_true", help="cek koneksi, API, dan project yang terdeteksi")
@@ -398,11 +421,18 @@ def main():
     ap.add_argument("--test-export", action="store_true", help="uji ekspor farfield saja")
     args = ap.parse_args()
 
+    extras = [x.strip() for x in args.extra_params.split(",") if x.strip()]
+    unknown = [x for x in extras if x not in BASE_EXTRA]
+    if unknown:
+        ap.error(f"--extra-params tidak dikenal: {unknown}. Yang tersedia: {sorted(BASE_EXTRA)}")
+    activate_extras(extras)
+
     # --- perintah yang tidak butuh CST
     if args.check_samples:
         name = args.run_name or (os.path.splitext(os.path.basename(args.project))[0] if args.project else None)
         run = name or default_run_name()
         args.samples = args.samples or default_samples(run)
+        detect_extras(args.samples)
         samples = select_samples(load_samples(args.samples), args.start, args.limit)
         summarize(samples)
         validate_all(samples)
@@ -420,6 +450,7 @@ def main():
     rd = os.path.join(EXPORT_DIR, args.run_name) if args.run_name else ed.run_dir(project)
     out_csv = os.path.join(rd, CSV_NAME)
     args.samples = args.samples or os.path.join(rd, "samples", "lhs_samples.csv")
+    detect_extras(args.samples)
     print(f"Project : {project}\nKeluaran: {rd}")
     if args.probe:
         return 0
