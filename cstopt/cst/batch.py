@@ -69,7 +69,11 @@ REQUIRED = ["StoreDoubleParameter", "full_history_rebuild", "SelectTreeItem",
 
 
 # ---------------------------------------------------------------- sampel LHS
-BASE_EXTRA = {"hs": 1.6, "Wf": 3.11}      # baseline parameter ekstra (dipakai untuk mengembalikan model setelah batch)
+# Baseline parameter ekstra (dipakai untuk mengembalikan model setelah batch).
+# Loss tangent: nama `tand` ditolak CST (bentrok dengan nama objek VBA), jadi beberapa nama alternatif disediakan;
+# pakai SATU saja, sesuai nama yang diterima CST dan nama kolom di CSV sampel.
+LOSS_NAMES = ["lossTan", "dLoss", "tanDelta", "tdelta"]
+BASE_EXTRA = {"hs": 1.6, "Wf": 3.11, **{n: 0.025 for n in LOSS_NAMES}}
 
 
 def activate_extras(names):

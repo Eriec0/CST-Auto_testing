@@ -28,3 +28,19 @@ Hasil: `data\MicrostripAntena_pilot_h\` (batch_lhs.csv, figures\pilot_h.png, pil
 - BW pecahan dan cakupan pita naik dengan h sementara efisiensi tidak turun jauh: pilih h terbaik untuk putaran BO berikutnya.
 - Efisiensi turun tajam saat h naik: tetap di 1,6 mm.
 - fr bergeser keluar pita: wajar, geometri perlu diskalakan ulang; BO yang menyesuaikan.
+
+## Hasil (8 simulasi, geometri tidak dioptimasi ulang)
+
+Rasio terhadap h = 1,6 mm (baseline 109 / 137):
+
+| h (mm) | BW | efisiensi | selisih fr (MHz) |
+|---|---|---|---|
+| 2,0 | 1,06x / 1,00x | 0,95x / 0,94x | +20 / +30 |
+| 2,4 | 1,04x / 1,05x | 0,91x / 0,94x | +38 / +56 |
+| 3,2 | 0,92x / 0,83x | 0,91x / 0,90x | +48 / +82 |
+
+Baris kontrol h = 1,6 identik dengan dataset utama. BW naik paling banyak 5 sampai 6% di h 2,0 sampai 2,4 mm lalu turun;
+efisiensi turun monoton sekitar 10%; gain datar (2,6 sampai 2,95 dBi) karena directivity naik; fr naik dengan h dan pencocokan
+memburuk karena geometri disetel untuk 1,6 mm. BW pecahan maksimum 5,04% tetap di plateau sekitar 5%.
+Keputusan: tetap h = 1,6 mm; h tidak ditambahkan ke BO. Keterbatasan: dua baseline, tanpa optimasi ulang pada tiap h.
+
