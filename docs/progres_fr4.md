@@ -47,3 +47,14 @@ target proposal membutuhkan substrat berbeda (rugi lebih kecil dan/atau lebih te
 
 1. Bekukan hasil FR-4 dan susun hasil akhir (tabel di atas, kurva S11 desain terbaik, konvergensi BO, parity GPR).
 2. Uji substrat lain dengan alur yang sama (file desain baru di `designs/`).
+
+## Pilot h dan kontrol loss tangent
+
+Rincian: [pilot_h.md](pilot_h.md) dan [kontrol_tand.md](kontrol_tand.md).
+
+- Ketebalan h (1,6 sampai 3,2 mm, geometri tetap): BW naik paling banyak 5 sampai 6% lalu turun, efisiensi turun sekitar 10%, gain datar,
+  fr naik. Keputusan: tetap h = 1,6 mm.
+- tan d (0,025 sampai 0,001, geometri tetap): efisiensi naik 0,47 ke 0,82 dan gain 2,77 ke 5,23 dBi, tetapi BW 150 MHz turun ke 0
+  (RL minimum memburuk dari -20,5 ke -9,8 dB karena geometri tidak dicocokkan ulang). Ada trade-off BW dan gain; plateau BW pecahan sekitar 5%
+  di FR-4 sebagian berasal dari rugi itu sendiri.
+- Berikutnya: BO pada Rogers RO4350B (lihat [substrat_ro4350b.md](substrat_ro4350b.md)) dan kurva Pareto BW terhadap gain untuk dua substrat.

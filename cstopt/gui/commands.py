@@ -54,14 +54,29 @@ def train(kernel="rbf", restarts=5, cv=5, seed=0, design=None):
                     "--cv", str(int(cv)), "--seed", str(int(seed))], design)
 
 
-def suggest(q=5, kernel="rbf", restarts=5, stage=None, design=None, report=False):
+def suggest(q=5, kernel="rbf", restarts=5, stage=None, design=None, report=False, focus=None, constraint=None,
+            region=None, region_auto=None, margin=None, calibrate=False, composite=False):
     a = ["suggest"]
     if report:
         a.append("--report")
     else:
         a += ["-q", str(int(q)), "--kernel", kernel, "--restarts", str(int(restarts))]
-    if stage in (1, 2, 3, 4):
+    if focus:
+        a += ["--focus", focus]
+        if constraint:
+            a += ["--constraint", constraint]
+    elif stage in (1, 2, 3, 4):
         a += ["--stage", str(stage)]
+    if region:
+        a += ["--region", region]
+    elif region_auto:
+        a += ["--region-auto", region_auto]
+    if margin:
+        a += ["--margin", margin]
+    if calibrate:
+        a.append("--calibrate")
+    if composite:
+        a.append("--composite")
     return _design(a, design)
 
 
