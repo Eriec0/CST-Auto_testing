@@ -332,10 +332,14 @@ class App:
         self.fig_cb.pack(side="left", padx=6)
         self.fig_cb.bind("<<ComboboxSelected>>", lambda e: self._draw_figure())
         ttk.Button(top, text="Buka folder gambar", command=lambda: self.open_data("figures")).pack(side="left", padx=6)
+        b = ttk.Button(top, text="Buat kurva Pareto (semua run)", command=self.do_pareto)
+        b.pack(side="left", padx=6)
+        self.buttons.append(b)
         self.fig_label = ttk.Label(t, anchor="center")
         self.fig_label.grid(row=1, column=0, sticky="nsew", pady=8)
         self.fig_label.bind("<Configure>", lambda e: self._draw_figure())
         self.fig_paths = {}
+        self.extra_figs = {}                                   # gambar di luar folder figures run (mis. Pareto)
 
     # ------------------------------------------------------------------ status
     def design(self):
@@ -438,6 +442,7 @@ class App:
     def _load_figure_list(self):
         figs = self.status.get("figures", [])
         self.fig_paths = {os.path.basename(p): p for p in figs}
+        self.fig_paths.update(self.extra_figs)
         self.fig_cb.configure(values=list(self.fig_paths))
         if self.fig_paths and self.fig_var.get() not in self.fig_paths:
             self.fig_var.set(next(iter(self.fig_paths)))
@@ -448,6 +453,15 @@ class App:
         self._load_figure_list()
         if name in self.fig_paths:
             self.fig_var.set(name)
+            self._draw_figure()
+        self.nb.select(self.tab_res)
+
+    def show_path(self, path):
+        """Tampilkan gambar dari jalur sembarang (mis. data/_compare/pareto.png)."""
+        if os.path.exists(path):
+            self.extra_figs[os.path.basename(path)] = path
+            self._load_figure_list()
+            self.fig_var.set(os.path.basename(path))
             self._draw_figure()
         self.nb.select(self.tab_res)
 
@@ -595,6 +609,9 @@ class App:
 
     def do_report(self):
         self.run_cmd(self._suggest_argv(report=True), after=lambda: self.show_figure("bo_convergence.png"))
+
+    def do_pareto(self):
+        self.run_cmd(cmd.pareto(), after=lambda: self.show_path(os.path.join(paths.DATA_DIR, "_compare", "pareto.png")))
 
     def do_backtest(self):
         self.run_cmd(cmd.backtest(design=self.design()), after=lambda: self.show_figure("bo_backtest.png"))

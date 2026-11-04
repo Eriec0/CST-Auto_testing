@@ -39,6 +39,7 @@ cstopt/                  kode
   cst/                   batch.py, export.py, farfield.py, dialog_watcher.py   (butuh CST)
   ml/                    core.py, train.py, suggest.py, backtest.py
   qc/                    dataset.py, curves.py
+  report/                pareto.py
   gui/                   app.py, runner.py, commands.py
 data/<RUN>/              dataset dan hasil, satu folder per project CST
 tools/                   smoke_test.py, make_seeds.py, wf50.py, analyze_pilot_h.py, analyze_control_tand.py, migrate_layout.py, compare_csv.py
@@ -76,6 +77,7 @@ GUI: `py main.py`. Setiap tombol menjalankan perintah CLI yang sama dan menampil
 | `py main.py suggest -q 5` | usulkan 5 kandidat berikutnya |
 | `py main.py suggest --report` | kurva konvergensi |
 | `py main.py backtest` | uji BO vs acak pada data yang ada |
+| `py main.py pareto` | kurva Pareto BW dan gain (dan cakupan pita) dari semua run, ke `data/_compare/` |
 
 Opsi tiap perintah: `py main.py <perintah> -h`. Opsi `--design nama` memilih file di `designs/` (bawaan: `uslot_dgs_fr4`).
 

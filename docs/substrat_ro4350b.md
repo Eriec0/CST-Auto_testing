@@ -54,6 +54,9 @@ py main.py suggest --design uslot_dgs_ro4350b --focus cover --region-auto 8:0.15
 py main.py suggest --design uslot_dgs_ro4350b --focus gain --constraint "bw_mhz>=100" --region-auto 8:0.15 --margin fr_ghz=0.08
 ```
 
+Setelah semua titik terkumpul, gambar kurva Pareto kedua substrat dalam satu gambar: `py main.py pareto`
+(atau tombol "Buat kurva Pareto" di GUI tab 6). Keluaran: `data\_compare\pareto.png` dan `pareto_front.csv`.
+
 ## Yang diharapkan dan yang dicari
 
 - Hipotesis dari kontrol tan d: gain 5 dBi dicapai dengan BW jauh lebih sempit dari FR-4 bila geometri tidak dicocokkan ulang; BO pada

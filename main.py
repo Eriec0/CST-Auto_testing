@@ -14,6 +14,7 @@ Perintah:
   train      latih dan evaluasi surrogate GPR
   suggest    usulkan kandidat BO berikutnya (--report: kurva konvergensi)
   backtest   uji BO vs pencarian acak pada data yang ada
+  pareto     kurva Pareto BW dan gain (dan cakupan pita) dari satu atau lebih run
 
 Setiap perintah punya opsi sendiri:  py main.py suggest -h
 """
@@ -36,6 +37,7 @@ COMMANDS = {
     "train": "cstopt.ml.train",
     "suggest": "cstopt.ml.suggest",
     "backtest": "cstopt.ml.backtest",
+    "pareto": "cstopt.report.pareto",
 }
 CST_ONLY = {"run", "export"}
 CST_MODULES = {"cst", "win32api", "win32gui", "win32con", "pythoncom", "pywinauto", "comtypes"}

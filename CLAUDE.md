@@ -37,13 +37,14 @@ Lp Wp LU WU gU PU LI LD WD gD PD. Substrat awal FR-4 (er 4,3, tan d 0,025, h 1,6
 
 Repo: github.com/Eriec0/CST-Auto_testing. Satu pintu masuk `py main.py` (GUI tkinter bila tanpa argumen). Struktur:
 `main.py`; `designs/` (satu file per desain atau substrat: parameter, BOUNDS, aturan geometri, STAGES, FOCI); `cstopt/` (paths, loader, status,
-`sampling/lhs.py`, `cst/` batch, export, farfield, dialog_watcher, `ml/` core, train, suggest, backtest, `qc/`, `gui/`); `data/<RUN>/` (batch_lhs.csv,
+`sampling/lhs.py`, `cst/` batch, export, farfield, dialog_watcher, `ml/` core, train, suggest, backtest, `qc/`, `report/pareto.py`, `gui/`); `data/<RUN>/` (batch_lhs.csv,
 curves/ eff/ ff/, samples/, models/, figures/); `macros/` (VBA, setup terpisah); `cst_projects/`; `tools/`; `docs/`.
 
 | Perintah | Fungsi |
 |---|---|
 | `py main.py status` | ringkasan (sampel, tahap BO, terbaik, peringatan batas) |
 | `lhs`, `run`, `qc`, `curves`, `train`, `suggest`, `backtest` | tahap alur; opsi: `-h` |
+| `pareto` | kurva Pareto BW vs gain dan cakupan vs gain dari semua run (`data/_compare/pareto.png` dan `_front.csv`); juga tombol di GUI tab 6 |
 | `run` (butuh CST) | `--samples CSV --auto-yes --limit N --run-name NAMA`; kolom hs/Wf/lossTan di CSV otomatis jadi parameter ekstra |
 | `suggest` | `-q 5 --seed 0 --restarts 2 --pool 8192`; opsi lanjutan: `--focus --constraint --region --region-auto --margin --calibrate --composite` |
 | `tools/make_seeds.py`, `tools/wf50.py`, `tools/smoke_test.py` | seed antar substrat; Wf 50 ohm; uji instalasi |
@@ -83,7 +84,7 @@ lewat fokus (`--focus bw --constraint "gain_fr_ieee_dbi>=4.5"`, dst.), selalu be
 Status (perbarui!): paket BO v2 + desain RO4350B + `docs/substrat_ro4350b.md` sudah dibuat; belum dijalankan oleh pengguna.
 Berikutnya: (a) pengguna menyiapkan project RO4350B di CST dan melaporkan epsilon dan tan d dari library (desain mengasumsikan 3,66 dan 0,0037; ubah
 `SUBSTRATE` bila beda); (b) seed dan putaran BO RO4350B (sekitar 40 sampai 60 simulasi); (c) fokus Pareto; (d) validasi mesh rapat dan toleransi
-+-0,1 mm pada desain akhir; (e) gambar Pareto FR-4 dari 155 sampel (belum dibuat) dan ringkasan satu halaman untuk dosen (belum dibuat);
++-0,1 mm pada desain akhir; (e) ringkasan satu halaman untuk dosen (belum dibuat); kurva Pareto sudah ada (`py main.py pareto`; FR-4 155 sampel: front 4 titik, BW 126 sampai 181 MHz pada gain 2,80 sampai 2,89 dBi, hampir datar);
 (f) laporan dan naskah; (g) perbarui `docs/progres_fr4.md` dengan hasil akhir.
 Cabang git: restruktur sudah di-merge; pilot-h dan control-tand dibuat bertumpuk; paket BO v2 di cabang bo-v2. Cek `git branch -a` dan `git log --oneline -8`.
 

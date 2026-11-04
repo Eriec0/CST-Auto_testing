@@ -85,6 +85,15 @@ def backtest(reps=20, steps=30, restarts=2, design=None):
                     "--restarts", str(int(restarts))], design)
 
 
+def pareto(runs=None, all_points=False):
+    a = ["pareto"]
+    if runs:
+        a += ["--runs", *runs]
+    if all_points:
+        a.append("--all")
+    return a
+
+
 def status(design=None):
     return _design(["status", "--json"], design)
 
