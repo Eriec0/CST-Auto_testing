@@ -260,13 +260,20 @@ class App:
     def _fill_bo(self):
         t = self.tab_bo
         t.columnconfigure(0, weight=1)
-        t.rowconfigure(3, weight=1)
+        t.rowconfigure(4, weight=1)
         top = ttk.Frame(t)
         top.grid(row=0, column=0, sticky="w")
         self.bo_q = tk.IntVar(value=5)
         self.bo_kernel = tk.StringVar(value="rbf")
         self.bo_restarts = tk.IntVar(value=5)
         self.bo_stage = tk.StringVar(value="otomatis")
+        self.bo_focus = tk.StringVar(value="otomatis")
+        self.bo_constraint = tk.StringVar(value="")
+        self.bo_region = tk.StringVar(value="")
+        self.bo_region_auto = tk.StringVar(value="")
+        self.bo_margin = tk.StringVar(value="")
+        self.bo_calib = tk.BooleanVar(value=False)
+        self.bo_comp = tk.BooleanVar(value=False)
         ttk.Label(top, text="Jumlah kandidat").pack(side="left")
         ttk.Spinbox(top, from_=1, to=20, textvariable=self.bo_q, width=4).pack(side="left", padx=(4, 12))
         ttk.Label(top, text="Kernel").pack(side="left")
@@ -275,16 +282,36 @@ class App:
         ttk.Spinbox(top, from_=1, to=20, textvariable=self.bo_restarts, width=4).pack(side="left", padx=(4, 12))
         ttk.Label(top, text="Tahap").pack(side="left")
         ttk.Combobox(top, textvariable=self.bo_stage, values=["otomatis", "1", "2"], state="readonly", width=9).pack(side="left", padx=(4, 12))
+        adv = ttk.LabelFrame(t, text="Opsi lanjutan (kosong = perilaku bawaan)", padding=6)
+        adv.grid(row=1, column=0, sticky="ew", pady=(8, 0))
+        adv.columnconfigure(3, weight=1)
+        ttk.Label(adv, text="Fokus").grid(row=0, column=0, sticky="w")
+        self.focus_cb = ttk.Combobox(adv, textvariable=self.bo_focus, values=["otomatis"], state="readonly", width=12)
+        self.focus_cb.grid(row=0, column=1, padx=(4, 12))
+        ttk.Label(adv, text="Constraint fokus").grid(row=0, column=2, sticky="w")
+        ttk.Entry(adv, textvariable=self.bo_constraint, width=34).grid(row=0, column=3, sticky="ew", padx=4)
+        ttk.Label(adv, text="Region manual").grid(row=1, column=0, sticky="w", pady=(4, 0))
+        ttk.Entry(adv, textvariable=self.bo_region, width=34).grid(row=1, column=1, columnspan=2, sticky="w", padx=4, pady=(4, 0))
+        ttk.Label(adv, text="atau otomatis K:margin").grid(row=1, column=2, sticky="e", pady=(4, 0))
+        ttk.Entry(adv, textvariable=self.bo_region_auto, width=12).grid(row=1, column=3, sticky="w", padx=4, pady=(4, 0))
+        ttk.Label(adv, text="Margin PoF").grid(row=2, column=0, sticky="w", pady=(4, 0))
+        ttk.Entry(adv, textvariable=self.bo_margin, width=34).grid(row=2, column=1, columnspan=2, sticky="w", padx=4, pady=(4, 0))
+        chk = ttk.Frame(adv)
+        chk.grid(row=2, column=3, sticky="w", pady=(4, 0))
+        ttk.Checkbutton(chk, text="Kalibrasi std", variable=self.bo_calib).pack(side="left", padx=(4, 12))
+        ttk.Checkbutton(chk, text="Gain komposit", variable=self.bo_comp).pack(side="left")
+        ttk.Label(adv, foreground="#666", text="contoh: constraint bw_mhz>=120 | region Lp=16:19,WD=7:8 | region otomatis 8:0.15 | margin fr_ghz=0.08",
+                  ).grid(row=3, column=0, columnspan=4, sticky="w", pady=(4, 0))
         bar = ttk.Frame(t)
-        bar.grid(row=1, column=0, sticky="w", pady=8)
+        bar.grid(row=2, column=0, sticky="w", pady=8)
         for text, fn in [("Usulkan kandidat", self.do_suggest), ("Kurva konvergensi", self.do_report), ("Uji BO vs acak (backtest)", self.do_backtest)]:
             b = ttk.Button(bar, text=text, command=fn)
             b.pack(side="left", padx=(0, 8))
             self.buttons.append(b)
         ttk.Button(bar, text="Pakai kandidat di tab 2", command=self.use_candidates).pack(side="left", padx=(8, 0))
-        ttk.Label(t, textvariable=self.warn_var, foreground="#b45f06", wraplength=1000).grid(row=2, column=0, sticky="w")
+        ttk.Label(t, textvariable=self.warn_var, foreground="#b45f06", wraplength=1000).grid(row=3, column=0, sticky="w")
         cbox = ttk.Frame(t)
-        cbox.grid(row=3, column=0, sticky="nsew", pady=(4, 0))
+        cbox.grid(row=4, column=0, sticky="nsew", pady=(4, 0))
         cbox.columnconfigure(0, weight=1)
         cbox.rowconfigure(0, weight=1)
         self.cand = ttk.Treeview(cbox, show="headings", height=8)
@@ -305,10 +332,14 @@ class App:
         self.fig_cb.pack(side="left", padx=6)
         self.fig_cb.bind("<<ComboboxSelected>>", lambda e: self._draw_figure())
         ttk.Button(top, text="Buka folder gambar", command=lambda: self.open_data("figures")).pack(side="left", padx=6)
+        b = ttk.Button(top, text="Buat kurva Pareto (semua run)", command=self.do_pareto)
+        b.pack(side="left", padx=6)
+        self.buttons.append(b)
         self.fig_label = ttk.Label(t, anchor="center")
         self.fig_label.grid(row=1, column=0, sticky="nsew", pady=8)
         self.fig_label.bind("<Configure>", lambda e: self._draw_figure())
         self.fig_paths = {}
+        self.extra_figs = {}                                   # gambar di luar folder figures run (mis. Pareto)
 
     # ------------------------------------------------------------------ status
     def design(self):
@@ -335,6 +366,9 @@ class App:
         self._load_metrics()
         self._load_candidates()
         self._load_figure_list()
+        self.focus_cb.configure(values=["otomatis"] + list(s.get("foci", [])))
+        if self.bo_focus.get() not in self.focus_cb.cget("values"):
+            self.bo_focus.set("otomatis")
 
     def _set_status_text(self, text, tags=None):
         self.status_text.configure(state="normal")
@@ -408,6 +442,7 @@ class App:
     def _load_figure_list(self):
         figs = self.status.get("figures", [])
         self.fig_paths = {os.path.basename(p): p for p in figs}
+        self.fig_paths.update(self.extra_figs)
         self.fig_cb.configure(values=list(self.fig_paths))
         if self.fig_paths and self.fig_var.get() not in self.fig_paths:
             self.fig_var.set(next(iter(self.fig_paths)))
@@ -418,6 +453,15 @@ class App:
         self._load_figure_list()
         if name in self.fig_paths:
             self.fig_var.set(name)
+            self._draw_figure()
+        self.nb.select(self.tab_res)
+
+    def show_path(self, path):
+        """Tampilkan gambar dari jalur sembarang (mis. data/_compare/pareto.png)."""
+        if os.path.exists(path):
+            self.extra_figs[os.path.basename(path)] = path
+            self._load_figure_list()
+            self.fig_var.set(os.path.basename(path))
             self._draw_figure()
         self.nb.select(self.tab_res)
 
@@ -551,12 +595,23 @@ class App:
         s = self.bo_stage.get()
         return int(s) if s.isdigit() else None
 
+    def _suggest_argv(self, report=False):
+        focus = self.bo_focus.get()
+        focus = None if focus in ("", "otomatis") else focus
+        return cmd.suggest(self.bo_q.get(), self.bo_kernel.get(), self.bo_restarts.get(), self._stage(), self.design(),
+                           report=report, focus=focus, constraint=self.bo_constraint.get().strip() or None,
+                           region=self.bo_region.get().strip() or None, region_auto=self.bo_region_auto.get().strip() or None,
+                           margin=self.bo_margin.get().strip() or None, calibrate=self.bo_calib.get(),
+                           composite=self.bo_comp.get())
+
     def do_suggest(self):
-        self.run_cmd(cmd.suggest(self.bo_q.get(), self.bo_kernel.get(), self.bo_restarts.get(), self._stage(), self.design()))
+        self.run_cmd(self._suggest_argv())
 
     def do_report(self):
-        self.run_cmd(cmd.suggest(stage=self._stage(), design=self.design(), report=True),
-                     after=lambda: self.show_figure("bo_convergence.png"))
+        self.run_cmd(self._suggest_argv(report=True), after=lambda: self.show_figure("bo_convergence.png"))
+
+    def do_pareto(self):
+        self.run_cmd(cmd.pareto(), after=lambda: self.show_path(os.path.join(paths.DATA_DIR, "_compare", "pareto.png")))
 
     def do_backtest(self):
         self.run_cmd(cmd.backtest(design=self.design()), after=lambda: self.show_figure("bo_backtest.png"))

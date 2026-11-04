@@ -121,3 +121,28 @@ STAGES = [
     # Syarat pindah tahap 1 -> 2 (default = constraint tahap 2) bisa diganti per tahap dengan
     # kunci "advance_when": [ ...daftar constraint... ].
 ]
+
+
+# ---------------------------------------------------------------- informasi substrat (dipakai make_seeds.py)
+SUBSTRATE = {"material": "FR-4 (lossy)", "er": 4.3, "tand": 0.025, "h": 1.6}
+
+# ---------------------------------------------------------------- model turunan (opsional)
+# gain = D + 10 log10(eta), dimodelkan dari D dan eta terpisah. Aktifkan dengan USE_COMPOSITES = True atau --composite.
+COMPOSITES = {"gain_fr_ieee_dbi": [("d_peak_fr_dbi", 1.0, "none"), ("eta_rad_fr", 10.0, "log10")]}
+USE_COMPOSITES = False
+
+# ---------------------------------------------------------------- fokus manual (opsional)
+# Dipilih dengan  py main.py suggest --focus NAMA  (menggantikan pergantian tahap otomatis). Batas constraint dapat
+# diganti lewat  --constraint "bw_mhz>=100". Semua fokus berbagi dataset dan model yang sama.
+_IN_BAND = [{"column": "fr_ghz", "op": ">=", "value": BAND_GHZ[0]},
+            {"column": "fr_ghz", "op": "<=", "value": BAND_GHZ[1]},
+            {"column": "rl_band_min_db", "op": "<=", "value": RL_LIMIT_DB},
+            {"column": "d_peak_fr_dbi", "op": ">=", "value": 4.0}]
+FOCI = {
+    "bw": {"objective": {"column": "bw_mhz", "goal": "max"}, "constraints": _IN_BAND},
+    "cover": {"objective": {"column": "band_cover_pct", "goal": "max"}, "constraints": _IN_BAND},
+    "match": {"objective": {"column": "rl_band_min_db", "goal": "min"},
+              "constraints": [c for c in _IN_BAND if c["column"] in ("fr_ghz", "d_peak_fr_dbi")]},
+    "gain": {"objective": {"column": "gain_fr_ieee_dbi", "goal": "max"},
+             "constraints": _IN_BAND + [{"column": "bw_mhz", "op": ">=", "value": 100.0}]},
+}

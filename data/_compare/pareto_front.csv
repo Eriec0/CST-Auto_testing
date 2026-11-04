@@ -1,0 +1,9 @@
+run,sample_id,bw_mhz,gain_fr_ieee_dbi,fr_ghz,rl_min_db,band_cover_pct,eta_rad_fr,d_peak_fr_dbi
+MicrostripAntena,137,180.63,2.803,3.698,-18.167,22.7,0.494,5.867
+MicrostripAntena,134,164.0,2.819,3.68,-22.097,25.4,0.4818,5.988
+MicrostripAntena,91,134.75,2.836,3.522,-29.482,33.4,0.461,6.126
+MicrostripAntena,95,126.25,2.894,3.462,-24.681,31.4,0.4537,6.221
+MicrostripAntena_RO4350B,16,109.42,5.156,3.65,-23.669,25.9,0.779,6.397
+MicrostripAntena_RO4350B,17,108.92,5.275,3.654,-27.581,25.2,0.8069,6.39
+MicrostripAntena_RO4350B,29,103.58,5.365,3.582,-29.444,25.9,0.7821,6.232
+MicrostripAntena_RO4350B,26,99.69,5.415,3.62,-30.072,24.9,0.7875,6.195

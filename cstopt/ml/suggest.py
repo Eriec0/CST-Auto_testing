@@ -77,14 +77,45 @@ def main():
     ap.add_argument("--report", action="store_true")
     ap.add_argument("--stage", type=int, default=None,
                     help="paksa tahap BO (1, 2, ...); default: dipilih otomatis dari data")
+    ap.add_argument("--focus", default=None,
+                    help="fokus manual dari FOCI di file desain (mis. bw, cover, gain, match); menggantikan tahap otomatis")
+    ap.add_argument("--constraint", default=None,
+                    help="ganti/tambah constraint pada --focus, mis. \"bw_mhz>=100,gain_fr_ieee_dbi>=4.5\"")
+    ap.add_argument("--region", default=None, help="region pencarian manual, mis. \"Lp=16:19,WD=7:8\" (lainnya rentang penuh)")
+    ap.add_argument("--region-auto", default=None, metavar="K:MARGIN",
+                    help="region otomatis di sekitar K desain terbaik, diperlebar MARGIN x lebar BOUNDS (mis. 8:0.15)")
+    ap.add_argument("--margin", default=None,
+                    help="perketat constraint untuk PoF saja, mis. \"fr_ghz=0.1\" (menahan kandidat dari tepi pita)")
+    ap.add_argument("--calibrate", action="store_true", help="kalibrasi std prediksi constraint dari validasi silang")
+    ap.add_argument("--composite", dest="composite", action="store_true", default=None,
+                    help="pakai model komposit (mis. gain = D + 10 log10 eta); bawaan mengikuti file desain")
+    ap.add_argument("--no-composite", dest="composite", action="store_false")
     args = ap.parse_args()
 
     d = mc.load_design(args.design)
+    if args.constraint and not args.focus:
+        ap.error("--constraint hanya dipakai bersama --focus")
+    if args.focus:
+        d.set_focus(args.focus, mc.parse_constraints(args.constraint))
     if args.stage is not None:
         d.force_stage = args.stage - 1
+    if args.composite is not None:
+        d.use_composites = args.composite
+    d.calibrate = args.calibrate
+    d.margins = mc.parse_margins(args.margin)
     df = mc.load_dataset(d)
-    mode = "dipaksa" if args.stage is not None else "otomatis"
-    print(f"Tahap BO: {d.stage_idx + 1}/{len(d.stages)} ({d.stage_name}, {mode})")
+    if args.region and args.region_auto:
+        ap.error("pilih salah satu: --region atau --region-auto")
+    if args.region:
+        d.region = mc.parse_region(d, args.region)
+    elif args.region_auto:
+        k, m = args.region_auto.split(":")
+        d.region = mc.region_auto(d, df, int(k), float(m))
+    if d.focus:
+        print(f"Fokus BO: {d.stage_name} (manual)")
+    else:
+        mode = "dipaksa" if args.stage is not None else "otomatis"
+        print(f"Tahap BO: {d.stage_idx + 1}/{len(d.stages)} ({d.stage_name}, {mode})")
     print(f"Desain: {d.name} | {len(df)} sampel | objective: {d.objective['goal']} "
           f"{d.objective['column']} | constraint: "
           f"{[(c['column'], c['op'], c['value']) for c in d.constraints]}")
