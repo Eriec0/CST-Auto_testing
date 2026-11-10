@@ -34,15 +34,15 @@ PARAM_NAMES = ["Lp", "Wp", "LU", "WU", "gU", "PU", "LI", "LD", "WD", "gD", "PD"]
 # Diturunkan dari rentang FR-4: panjang dikali s = sqrt(eeff_FR4 / eeff_RO4350B) = 1.079 (Hammerstad, W = 25 mm); celah gU dan gD tetap.
 BOUNDS = {
     "Lp": (16.19, 26.98),
-    "Wp": (23.74, 33.46),
-    "LU": (3.24, 12.95),
-    "WU": (4.86, 14.03),
+    "Wp": (23.74, 38.3),
+    "LU": (1.5, 12.95),
+    "WU": (3.0, 14.03),
     "gU": (0.4, 1.2),
     "PU": (-1.08, 3.78),
-    "LI": (4.86, 7.55),
-    "LD": (1.08, 5.4),
-    "WD": (2.0, 10.0),     #"WD": (2.16, 8.63)
-    "gD": (0.2, 1.0),
+    "LI": (4.86, 8.20),      # <-- WIDENED dari 7.55 (+8%)
+    "LD": (1.08, 7.5),
+    "WD": (2.0, 18.0),        # <-- WIDENED dari 14.0 (+28%)
+    "gD": (0.2, 1.4),
     "PD": (-3.24, 3.24),
 }
 DECIMALS = 3              # pembulatan nilai parameter (mm)
