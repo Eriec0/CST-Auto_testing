@@ -30,6 +30,7 @@ requirements.txt         paket ML dan GUI (portabel)
 requirements-cst.txt     tambahan khusus Windows dengan CST
 designs/                 SATU FILE PER DESAIN atau substrat (parameter, rentang, constraint, lokasi data)
   uslot_dgs_fr4.py
+  uslot_dgs_ro4350b.py
 macros/                  macro VBA untuk membangun model di CST (setup terpisah, dijalankan manual di CST)
 cst_projects/            file project .cst
 cstopt/                  kode
@@ -38,9 +39,10 @@ cstopt/                  kode
   cst/                   batch.py, export.py, farfield.py, dialog_watcher.py   (butuh CST)
   ml/                    core.py, train.py, suggest.py, backtest.py
   qc/                    dataset.py, curves.py
+  report/                pareto.py
   gui/                   app.py, runner.py, commands.py
 data/<RUN>/              dataset dan hasil, satu folder per project CST
-tools/                   migrate_layout.py, smoke_test.py, compare_csv.py
+tools/                   smoke_test.py, make_seeds.py, wf50.py, analyze_pilot_h.py, analyze_control_tand.py, migrate_layout.py, compare_csv.py
 docs/                    catatan hasil
 ```
 
@@ -75,11 +77,33 @@ GUI: `py main.py`. Setiap tombol menjalankan perintah CLI yang sama dan menampil
 | `py main.py suggest -q 5` | usulkan 5 kandidat berikutnya |
 | `py main.py suggest --report` | kurva konvergensi |
 | `py main.py backtest` | uji BO vs acak pada data yang ada |
+| `py main.py pareto` | kurva Pareto BW dan gain (dan cakupan pita) dari semua run, ke `data/_compare/` |
 
 Opsi tiap perintah: `py main.py <perintah> -h`. Opsi `--design nama` memilih file di `designs/` (bawaan: `uslot_dgs_fr4`).
 
 Contoh satu putaran BO: `suggest -q 5`, lalu `run --samples data/MicrostripAntena/samples/bo_candidates.csv --auto-yes`,
 lalu ulangi. `suggest` memberi peringatan bila desain terbaik menempel di batas parameter (tanda `BOUNDS` perlu dilebarkan).
+
+## Opsi BO lanjutan (semua mati secara bawaan)
+
+Dipakai pada `py main.py suggest` (atau kolom "Opsi lanjutan" di GUI tab 5):
+
+| Opsi | Fungsi |
+|---|---|
+| `--focus bw\|cover\|match\|gain` | objective manual dari `FOCI` di file desain, menggantikan pergantian tahap otomatis |
+| `--constraint "bw_mhz>=120"` | ganti atau tambah constraint pada fokus (untuk kurva Pareto) |
+| `--region "Lp=16:19,WD=7:8"` | batasi pencarian ke kotak yang lebih sempit dari `BOUNDS` |
+| `--region-auto 8:0.15` | kotak otomatis di sekitar 8 desain terbaik, diperlebar 0,15 x lebar `BOUNDS` |
+| `--margin fr_ghz=0.08` | perketat constraint untuk probabilitas feasibility saja (menahan kandidat dari tepi pita) |
+| `--calibrate` | kalibrasi std prediksi constraint dari validasi silang |
+| `--composite` | gain dimodelkan sebagai D + 10 log10(eta) dari dua model terpisah |
+
+Fokus gain dan cakupan sebaiknya selalu dipakai bersama `--region-auto` dan `--margin`; tanpa itu GP mengekstrapolasi ke prediksi ekstrem.
+
+## Substrat lain
+
+Satu substrat = satu project CST + satu file desain (`designs/`). Langkah dan perintah: [docs/substrat_ro4350b.md](docs/substrat_ro4350b.md).
+`tools/wf50.py` menghitung `Wf` 50 ohm, `tools/make_seeds.py` membuat seed dari hasil substrat lain.
 
 ## Data
 

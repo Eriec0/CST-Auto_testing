@@ -37,6 +37,7 @@ def summary(design=None):
         "metrics": _file_info(os.path.join(paths.models_dir(run), "gpr_metrics.csv")),
     }
     s["figures"] = sorted(glob.glob(os.path.join(paths.figures_dir(run), "*.png")))
+    s["foci"] = list(getattr(mod, "FOCI", {}))
     if not os.path.exists(mod.DATASET_CSV):
         s["note"] = "Dataset belum ada. Mulai dari: lhs, lalu run (simulasi CST)."
         return s
@@ -54,6 +55,7 @@ def summary(design=None):
     s["n_initial"] = int((ids <= n0).sum())
     s["n_bo"] = int((ids > n0).sum())
     s["stage"] = {"index": d.stage_idx + 1, "total": len(d.stages), "name": d.stage_name}
+    s["foci"] = list(d.foci)
     oc = d.objective["column"]
     s["objective"] = {"column": oc, "goal": d.objective["goal"]}
     ok = mc.feasible_mask(d, df)

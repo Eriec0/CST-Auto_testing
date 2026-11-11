@@ -43,13 +43,18 @@ def main():
     if not os.path.exists(csv_path):
         sys.exit(f"Tidak ada: {csv_path}")
     df = pd.read_csv(csv_path)
-    req = pd.read_csv(args.samples)
     problems, notes = [], []
+    if os.path.exists(args.samples):
+        req = pd.read_csv(args.samples)
+    else:
+        req = None
+        notes.append(f"{args.samples} tidak ada (run tanpa LHS, mis. dari seed dan BO): pemeriksaan sampel diminta dan "
+                     "kecocokan parameter dilewati; pemeriksaan lain tetap dijalankan")
 
     # 1. jumlah, hilang, ganda
-    miss = sorted(set(req.sample_id) - set(df.sample_id))
-    extra = sorted(set(df.sample_id) - set(req.sample_id))
-    print(f"Baris: {len(df)} | sampel diminta: {len(req)}")
+    miss = sorted(set(req.sample_id) - set(df.sample_id)) if req is not None else []
+    extra = sorted(set(df.sample_id) - set(req.sample_id)) if req is not None else []
+    print(f"Baris: {len(df)}" + (f" | sampel diminta: {len(req)}" if req is not None else ""))
     if miss:
         problems.append(f"{len(miss)} sampel belum ada hasilnya: {miss[:15]}{' ...' if len(miss) > 15 else ''}")
     if extra:
@@ -61,9 +66,11 @@ def main():
         problems.append(f"{int(key.duplicated().sum())} kombinasi parameter ganda di hasil")
 
     # 2. parameter cocok dengan yang diminta
-    m = df.merge(req, on="sample_id", suffixes=("", "_req"))
-    bad = [int(r.sample_id) for r in m.itertuples()
-           if any(abs(getattr(r, p) - getattr(r, p + "_req")) > 1e-6 for p in PARAMS)]
+    bad = []
+    if req is not None:
+        m = df.merge(req, on="sample_id", suffixes=("", "_req"))
+        bad = [int(r.sample_id) for r in m.itertuples()
+               if any(abs(getattr(r, p) - getattr(r, p + "_req")) > 1e-6 for p in PARAMS)]
     if bad:
         problems.append(f"parameter hasil TIDAK sama dengan yang diminta pada sampel: {bad}")
 
