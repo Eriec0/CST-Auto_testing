@@ -1,6 +1,6 @@
 # CLAUDE.md: konteks proyek dan aturan kerja
 
-Baca file ini dulu di setiap percakapan baru. Perbarui bagian 5 dan 6 di akhir sesi (lihat bagian 9).
+Baca file ini dulu di setiap percakapan baru, lalu `PROGRESS.md` (status terkini dan langkah berikutnya). Perbarui bagian 5 dan 6 di akhir sesi (lihat bagian 9).
 Rincian hasil ada di `docs/` (progres_fr4.md, pilot_h.md, kontrol_tand.md, substrat_ro4350b.md); baca hanya bila perlu.
 
 ## 0. Aturan hemat token (wajib)
@@ -59,6 +59,7 @@ BO: tahap otomatis (Tahap 1 minimalkan rl_band_min_db sampai ada sampel feasible
 3. Hasil FR-4 (155 sampel) dan diagnosis: target tidak tercapai; bukti batas fisik (bagian 5).
 4. Pilot ketebalan h (8 simulasi) dan kontrol tan d (7 simulasi) lewat parameter CST ekstra.
 5. Revisi BO v2 (region, margin, kalibrasi, komposit, fokus) dan desain Rogers RO4350B.
+6. Data RO4350B 150 sampel (BOUNDS diubah tiga kali); alat baru: `pareto` (tangga, knee, hypervolume), `validate`, `report`, `tools/make_tolerance.py`, `tools/analyze_tolerance.py`; `qc` jalan tanpa `lhs_samples.csv`.
 
 ## 5. Temuan (angka acuan)
 
@@ -74,6 +75,8 @@ BO: tahap otomatis (Tahap 1 minimalkan rl_band_min_db sampai ada sampel feasible
 - Kontrol tan d (0,025 ke 0,001): eta 0,47 ke 0,82, gain 2,77 ke 5,23 dBi, tetapi BW 150 MHz ke 0 (RL min -20,5 ke -9,8 dB, geometri tidak dicocokkan ulang).
   Jadi ada trade-off BW dan gain; BW 200 MHz dan gain 5 dBi sekaligus kemungkinan besar tidak bisa dengan topologi ini pada h 1,6 mm.
 - Uji reproduksi: kontrol h = 1,6 dan tan d = 0,025 identik dengan data asli (CST deterministik, bisa dipercaya).
+- RO4350B h 1,524 mm, 150 sampel: front 15 titik, BW 116 sampai 227 MHz; gain >= 5 dBi hanya sampai BW 150 MHz (sampel 145, 5,13 dBi); BW 227 MHz pada gain 4,40 dBi (sampel 149; BW pecahan 6,35%, perlu verifikasi S11 dan mesh). Hypervolume BW: FR-4 518,5, RO 1217,0.
+- Validasi maju FR-4 (latih id 1 sampai 135, uji 136 sampai 155): bias fr +244,5 MHz, RMSE 316 MHz, PoF fr 0,68 vs aktual 0,25 (terreproduksi); mode batch berurutan jauh lebih baik (PoF 0,64 vs 0,68).
 
 ## 6. Keputusan dan langkah berikutnya
 
@@ -81,11 +84,9 @@ Keputusan: tetap FR-4 h = 1,6 mm untuk hasil FR-4; substrat kedua Rogers RO4350B
 `MicrostripAntena_RO4350B`, desain `uslot_dgs_ro4350b`, seed dari FR-4 diskalakan sqrt(eeff)); hasil utama = kurva Pareto BW vs gain untuk dua substrat
 lewat fokus (`--focus bw --constraint "gain_fr_ieee_dbi>=4.5"`, dst.), selalu bersama `--region-auto` dan `--margin fr_ghz=0.08`.
 
-Status (perbarui!): paket BO v2 + desain RO4350B + `docs/substrat_ro4350b.md` sudah dibuat; belum dijalankan oleh pengguna.
-Berikutnya: (a) pengguna menyiapkan project RO4350B di CST dan melaporkan epsilon dan tan d dari library (desain mengasumsikan 3,66 dan 0,0037; ubah
-`SUBSTRATE` bila beda); (b) seed dan putaran BO RO4350B (sekitar 40 sampai 60 simulasi); (c) fokus Pareto; (d) validasi mesh rapat dan toleransi
-+-0,1 mm pada desain akhir; (e) ringkasan satu halaman untuk dosen (belum dibuat); kurva Pareto sudah ada (`py main.py pareto`; FR-4 155 sampel: front 4 titik, BW 126 sampai 181 MHz pada gain 2,80 sampai 2,89 dBi, hampir datar);
-(f) laporan dan naskah; (g) perbarui `docs/progres_fr4.md` dengan hasil akhir.
+Status (11 Nov 2026): BO RO4350B sudah berjalan (150 sampel); rincian, perintah, dan daftar belum teruji ada di `PROGRESS.md`.
+Berikutnya: (a) sapuan `--focus gain --constraint "bw_mhz>=200"` (lalu 190 dan 215) untuk mengisi celah BW 181 sampai 227 MHz; (b) verifikasi S11 dan mesh rapat sampel 149, 140, 132;
+(c) pilih 3 desain final RO4350B; (d) toleransi desain final (butuh CST); (e) `validate`, `train`, `backtest`, `pareto`, `report` pada data lengkap; (f) ringkasan satu halaman untuk dosen dan naskah.
 Cabang git: restruktur sudah di-merge; pilot-h dan control-tand dibuat bertumpuk; paket BO v2 di cabang bo-v2. Cek `git branch -a` dan `git log --oneline -8`.
 
 ## 7. Jebakan dan catatan teknis

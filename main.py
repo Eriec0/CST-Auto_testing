@@ -15,6 +15,8 @@ Perintah:
   suggest    usulkan kandidat BO berikutnya (--report: kurva konvergensi)
   backtest   uji BO vs pencarian acak pada data yang ada
   pareto     kurva Pareto BW dan gain (dan cakupan pita) dari satu atau lebih run
+  validate   validasi maju GPR: bias, kalibrasi PoF, akurasi di wilayah kerja, saran margin
+  report     susun laporan otomatis (report.md dan gambar) dari data yang ada
 
 Setiap perintah punya opsi sendiri:  py main.py suggest -h
 """
@@ -38,6 +40,8 @@ COMMANDS = {
     "suggest": "cstopt.ml.suggest",
     "backtest": "cstopt.ml.backtest",
     "pareto": "cstopt.report.pareto",
+    "validate": "cstopt.ml.validate",
+    "report": "cstopt.report.report",
 }
 CST_ONLY = {"run", "export"}
 CST_MODULES = {"cst", "win32api", "win32gui", "win32con", "pythoncom", "pywinauto", "comtypes"}
