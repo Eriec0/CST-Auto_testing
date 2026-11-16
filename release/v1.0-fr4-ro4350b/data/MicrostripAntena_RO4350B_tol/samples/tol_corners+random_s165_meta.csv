@@ -1,0 +1,17 @@
+sample_id,base_id,plan,label,param,sign,dilewati,signs,catatan
+16521,165,corners,fr_turun,,0,1,Lp+ Wp- gU+ gD- LI+ hs-,"dilewati, geometri tidak valid: WU terlalu sempit terhadap gU"
+16522,165,corners,fr_naik,,0,0,Lp- Wp+ gU- gD+ LI- hs+,
+16523,165,corners,bw_turun,,0,1,Lp+ Wp+ gU+ gD- LI+ hs-,"dilewati, geometri tidak valid: WU terlalu sempit terhadap gU"
+16524,165,corners,gain_turun,,0,0,Lp- Wp- gU- gD- LI+ hs+,
+16531,165,random,acak1,,0,1,Lp- Wp+ gU+ gD+ LI+ hs-,"dilewati, geometri tidak valid: WU terlalu sempit terhadap gU"
+16532,165,random,acak2,,0,1,Lp- Wp+ gU+ gD+ LI+ hs+,"dilewati, geometri tidak valid: WU terlalu sempit terhadap gU"
+16533,165,random,acak3,,0,1,Lp+ Wp+ gU+ gD+ LI+ hs-,"dilewati, geometri tidak valid: WU terlalu sempit terhadap gU"
+16534,165,random,acak4,,0,0,Lp+ Wp+ gU- gD+ LI+ hs-,
+16535,165,random,acak5,,0,0,Lp+ Wp+ gU- gD+ LI- hs-,
+16536,165,random,acak6,,0,0,Lp- Wp- gU- gD+ LI+ hs-,
+16537,165,random,acak7,,0,0,Lp+ Wp- gU- gD+ LI- hs-,
+16538,165,random,acak8,,0,0,Lp- Wp- gU- gD+ LI- hs-,
+16539,165,random,acak9,,0,1,Lp- Wp- gU+ gD+ LI+ hs+,"dilewati, geometri tidak valid: WU terlalu sempit terhadap gU"
+16540,165,random,acak10,,0,0,Lp- Wp- gU- gD+ LI- hs+,
+16541,165,random,acak11,,0,1,Lp- Wp+ gU+ gD+ LI+ hs+,"dilewati, geometri tidak valid: WU terlalu sempit terhadap gU"
+16542,165,random,acak12,,0,0,Lp- Wp- gU- gD- LI- hs-,
