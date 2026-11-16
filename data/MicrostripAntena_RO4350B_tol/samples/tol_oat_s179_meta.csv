@@ -1,0 +1,13 @@
+sample_id,base_id,plan,label,param,sign,dilewati,signs,catatan
+17901,179,oat,Lp+,Lp,1,0,,
+17902,179,oat,Lp-,Lp,-1,1,,"dilewati, geometri tidak valid: DGS keluar dari proyeksi patch"
+17903,179,oat,Wp+,Wp,1,0,,
+17904,179,oat,Wp-,Wp,-1,0,,
+17905,179,oat,gU+,gU,1,0,,
+17906,179,oat,gU-,gU,-1,0,,
+17907,179,oat,gD+,gD,1,0,,
+17908,179,oat,gD-,gD,-1,0,,
+17909,179,oat,LI+,LI,1,0,,
+17910,179,oat,LI-,LI,-1,0,,
+17911,179,oat,hs+,hs,1,0,,
+17912,179,oat,hs-,hs,-1,0,,

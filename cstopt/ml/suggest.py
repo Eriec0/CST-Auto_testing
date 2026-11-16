@@ -149,9 +149,36 @@ def main():
     print(f"\n{len(cand)} kandidat disimpan: {d.candidates}")
     print(rep[show].round(4).to_string(index=False))
     warn_hits(mc.edge_hits(d, cand[d.params].values), "kandidat BO ini")
+    stop_rule(d, df, rep)
     print(f"\nLaporan lengkap (prediksi mean/std semua target): {rep_path}")
     print("\nLangkah berikutnya:")
     print(f"  py main.py run --samples \"{d.candidates}\" --auto-yes")
+
+
+def stop_rule(d, df, rep):
+    """Aturan berhenti (hanya informasi): rasio EI maks kandidat terhadap |objective terbaik yang feasible|.
+    Objective tidak ditransformasi, jadi keduanya dalam satuan asli. Bila rasio < 1% pada dua putaran berurutan
+    (objective dan constraint yang sama) dicetak bahwa BO dianggap konvergen. Tidak menghentikan apa pun dan tidak mengubah kandidat."""
+    f_best, _ = mc.best_feasible(d, df)
+    if f_best is None or "ei" not in rep.columns or abs(f_best) < 1e-12:
+        return
+    ei_max = float(rep["ei"].max())
+    ratio = ei_max / abs(f_best)
+    sig = f"{d.stage_name}|{d.objective['goal']} {d.objective['column']}|" + ";".join(
+        f"{c['column']}{c['op']}{c['value']:g}" for c in d.constraints)
+    path = os.path.join(d.models_dir, "ei_history.csv")
+    row = pd.DataFrame([{"waktu": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "n_sampel": len(df), "sinyal": sig,
+                         "ei_maks": ei_max, "f_terbaik": abs(f_best), "rasio": ratio}])
+    try:
+        os.makedirs(d.models_dir, exist_ok=True)
+        hist = pd.concat([pd.read_csv(path), row], ignore_index=True) if os.path.exists(path) else row
+        hist.to_csv(path, index=False)
+    except OSError:
+        hist = row
+    same = hist[hist["sinyal"] == sig].tail(2)
+    print(f"\n[info] EI maks / |objective terbaik| = {100 * ratio:.2f}% (ambang konvergen: di bawah 1% pada dua putaran berurutan)")
+    if len(same) == 2 and (same["rasio"] < 0.01).all():
+        print("[info] BO dianggap konvergen untuk objective dan constraint ini (hanya informasi, tidak menghentikan apa pun).")
 
 
 if __name__ == "__main__":

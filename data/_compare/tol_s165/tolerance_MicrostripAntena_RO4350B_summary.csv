@@ -1,0 +1,5 @@
+sample_id,besaran,nominal,minimum,maksimum,simpangan_baku,selisih_maks,n
+165,fr_ghz,3.616,3.588,3.664,0.02062,0.048,20
+165,rl_min_db,-24.9,-27.553,-22.919,1.33067,2.653,20
+165,bw_mhz,158.57,151.17,164.24,3.75294,7.4,20
+165,gain_fr_ieee_dbi,5.026,4.809,5.095,0.08287,0.217,20

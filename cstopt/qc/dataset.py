@@ -18,25 +18,27 @@ import os
 import sys
 
 from cstopt import paths
-from cstopt.loader import default_run_name
+from cstopt.loader import module_for_run
 
 import numpy as np
 import pandas as pd
 
-PARAMS = ["Lp", "Wp", "LU", "WU", "gU", "PU", "LI", "LD", "WD", "gD", "PD"]
 CORE = ["fr_ghz", "rl_min_db", "bw_mhz", "s11_at_f0_db", "eta_rad", "eta_rad_fr", "d_peak_dbi",
         "d_peak_fr_dbi", "gain_fr_ieee_dbi", "f_mon_fr_ghz", "n_eff_points"]
 
 
 def main():
     ap = argparse.ArgumentParser(description="QC dataset batch CST")
-    ap.add_argument("--run-name", default=None, help="default: RUN_NAME desain bawaan")
+    ap.add_argument("--design", default=None, help="nama file di designs/ (default: dicocokkan dari --run-name, lalu desain bawaan)")
+    ap.add_argument("--run-name", default=None, help="default: RUN_NAME desain")
     ap.add_argument("--samples", default=None, help="default: data/<run>/samples/lhs_samples.csv")
     ap.add_argument("--expect-eff", type=int, default=9, help="jumlah titik kurva efisiensi (jumlah monitor)")
     ap.add_argument("--mon-step", type=float, default=0.25)
     args = ap.parse_args()
 
-    run = args.run_name or default_run_name()
+    mod = module_for_run(args.run_name, args.design)
+    run = args.run_name or mod.RUN_NAME
+    PARAMS = list(mod.PARAM_NAMES)                  # parameter geometri dari file desain (bukan lagi 11 nama FR-4 tetap)
     rd = paths.run_dir(run)
     args.samples = args.samples or os.path.join(paths.samples_dir(run), "lhs_samples.csv")
     csv_path = os.path.join(rd, "batch_lhs.csv")

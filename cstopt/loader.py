@@ -26,3 +26,19 @@ def load_design_module(name=None):
 def default_run_name(design=None):
     """RUN_NAME (nama project CST / folder data) dari desain yang dipilih."""
     return load_design_module(design).RUN_NAME
+
+
+def module_for_run(run_name=None, design=None):
+    """Modul desain untuk qc dan alat lain yang tidak boleh mengimpor paket CST. design (nama) menang; bila tidak ada, cari desain
+    dengan RUN_NAME sama persis atau awalan terpanjang yang diikuti garis bawah (mis. <run>_tol); bila tak ada, desain bawaan."""
+    if design:
+        return load_design_module(design)
+    best, best_len = None, -1
+    for name in paths.list_designs():
+        try:
+            rn = getattr(load_design_module(name), "RUN_NAME", None)
+        except Exception:
+            continue
+        if rn and run_name and (run_name == rn or run_name.startswith(rn + "_")) and len(rn) > best_len:
+            best, best_len = name, len(rn)
+    return load_design_module(best) if best else load_design_module(None)

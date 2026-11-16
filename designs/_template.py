@@ -1,0 +1,190 @@
+"""
+TEMPLAT desain baru (diawali garis bawah, jadi tidak muncul di daftar desain dan tidak diuji smoke_test).
+
+Jangan edit file ini langsung untuk desain nyata. Buat salinan dengan:
+    py tools/new_design.py nama_desain --er 3.66 --tand 0.0037 --h 1.524
+lalu edit designs/nama_desain.py. Pilih desain dengan  --design nama_desain  (tanpa .py).
+
+Isi templat = desain U-Slot + DGS Dumbbell FR-4 sebagai contoh lengkap. Bagian yang WAJIB diganti untuk
+antena lain ditandai [GANTI]; bagian lain boleh dibiarkan. Antarmuka sisi CST (BASE_PARAMS, EXTRA_BASE, CST,
+features) dibaca oleh cstopt/cst/config.py dan cstopt/ml/core.py; semuanya opsional dan bernilai bawaan lama.
+Parameter di CST harus bernama PERSIS sama dengan PARAM_NAMES, dan bukan nama objek VBA (mis. `tand` ditolak).
+"""
+import os
+
+from cstopt import paths
+
+NAME = "uslot_dgs_dumbbell_fr4"      # [GANTI] nama unik desain (diganti otomatis oleh tools/new_design.py)
+
+# ---------------------------------------------------------------- data
+# Nama project CST = nama folder data:  data/<RUN_NAME>/
+RUN_NAME = "MicrostripAntena"          # [GANTI] = nama project CST = folder data/<RUN_NAME>/ (HARUS unik per desain)
+RUN_DIR = paths.run_dir(RUN_NAME)
+DATASET_CSV = os.path.join(RUN_DIR, "batch_lhs.csv")                           # keluaran `main.py run`
+CANDIDATES_CSV = os.path.join(paths.samples_dir(RUN_NAME), "bo_candidates.csv")  # masukan `main.py run --samples`
+CURVES_DIR = os.path.join(RUN_DIR, "curves")                                   # s11_sample{sid}.csv
+MODELS_DIR = paths.models_dir(RUN_NAME)                                        # gpr_models.joblib, gpr_metrics.csv
+FIGURES_DIR = paths.figures_dir(RUN_NAME)                                      # gambar PNG
+CURVE_FILE = "s11_sample{sid}.csv"
+ID_COLUMN = "sample_id"
+N_INITIAL = 80          # jumlah sampel awal (LHS); sampel dengan id lebih besar dianggap hasil BO
+
+# ---------------------------------------------------------------- parameter, rentang, aturan geometri
+# [GANTI] nama parameter geometri; sama persis dengan parameter di project CST
+PARAM_NAMES = ["Lp", "Wp", "LU", "WU", "gU", "PU", "LI", "LD", "WD", "gD", "PD"]
+
+# Rentang (min, max) dalam mm. Titik acuan baseline ada di komentar.
+# Lp digeser ke atas karena resonansi baseline (3,99 GHz) berada di atas 3,5 GHz
+# (percobaan Anda sebelumnya bergerak ke Lp ~ 20,8). SESUAIKAN bila perlu.
+# [GANTI] rentang (min, max) tiap parameter dalam mm
+BOUNDS = {
+    "Lp": (15.0, 25.0),   # baseline 20.22 | diperlebar (semula 20-23, lalu 18-25): desain BW tertinggi menempel di 18
+    "Wp": (22.0, 31.0),   # baseline 26.33 | diperlebar (semula 24-29)
+    "LU": (3.0, 12.0),    # baseline 10.0  | diperlebar (semula 6-10,5, lalu 5-12): desain BW tertinggi menempel di 5
+    "WU": (4.5, 13.0),    # baseline 10.5  | batas bawah 7 -> 6 -> 4,5: desain BW tertinggi menempel di 6
+    "gU": (0.4, 1.2),     # baseline 0.6
+    "PU": (-1.0, 3.5),    # baseline 2.0
+    "LI": (4.5, 7.0),     # baseline 6.15
+    "LD": (1.0, 5.0),     # baseline 3.0   | batas bawah 2 -> 1 (semua kandidat BO menempel di 2)
+    "WD": (2.0, 8.0),     # baseline 3.0   | batas atas 5 -> 6 -> 8: desain BW tertinggi menempel di 6 (Ws = Wp+6*hs, aman)
+    "gD": (0.2, 1.0),     # baseline 0.3
+    "PD": (-3.0, 3.0),    # baseline 0.0
+}
+DECIMALS = 3              # pembulatan nilai parameter (mm)
+AD = 2.5                  # panjang penghubung dumbbell (tetap, sama dengan macro)
+MARGIN = 0.5              # margin dari check_geometry
+
+
+# ---------------------------------------------------------------- geometri
+# [GANTI] aturan geometri; kembalikan daftar masalah (kosong = valid). Dipakai LHS, BO, dan `run --check-samples`.
+def geometry_problems(p):
+    """Aturan yang sama dengan check_geometry() di cstopt/cst/batch.py, ditambah beberapa
+    pengaman wajar. Kembalikan daftar masalah (kosong = valid)."""
+    yb = p["Lp"] / 2 + p["PU"] - p["LU"] / 2
+    yt = p["Lp"] / 2 + p["PU"] + p["LU"] / 2
+    bad = []
+    if yb <= p["LI"] + MARGIN:
+        bad.append("dasar U-Slot terlalu dekat ujung inset")
+    if yt >= p["Lp"] - MARGIN:
+        bad.append("ujung U-Slot hampir keluar patch")
+    if p["WU"] >= p["Wp"] - 1:
+        bad.append("WU terlalu lebar terhadap Wp")
+    if p["WU"] <= 4 * p["gU"]:
+        bad.append("WU terlalu sempit terhadap gU")
+    if p["gD"] >= p["WD"]:
+        bad.append("penghubung DGS lebih lebar dari kepala")
+    yd = p["Lp"] / 2 + p["PD"]
+    half = AD / 2 + p["LD"]
+    if yd - half < 0 or yd + half > p["Lp"]:
+        bad.append("DGS keluar dari proyeksi patch")
+    return bad
+
+
+def is_valid(params):
+    """Aturan geometri desain (sama dengan check_geometry di cstopt/cst/batch.py)."""
+    return not geometry_problems(params)
+
+
+# ---------------------------------------------------------------- target pemodelan
+BAND_GHZ = (3.3, 3.7)    # SATU-SATUNYA tempat mengubah pita: dipakai fitur kurva S11 dan constraint fr tahap 2
+RL_LIMIT_DB = -10.0
+
+# Kolom dataset yang dimodelkan GPR. Kolom turunan (rl_band_*, dip_dist_ghz, dip_nearest_db, n_dips)
+# dihitung otomatis dari kurva S11 di CURVES_DIR.
+TARGETS = ["fr_ghz", "rl_min_db", "bw_mhz", "s11_at_f0_db", "d_peak_dbi", "d_peak_fr_dbi",
+           "eta_rad_fr", "gain_fr_ieee_dbi",
+           "rl_band_min_db", "rl_band_max_db", "rl_band_mean_db",
+           "dip_dist_ghz", "dip_nearest_db"]
+
+# Transformasi untuk target yang distribusinya miring/banyak nol (hanya untuk TARGETS non-objective)
+TRANSFORMS = {"bw_mhz": "log1p"}
+
+# ---------------------------------------------------------------- tahap BO (objective & constraint)
+# BO berjalan dalam TAHAP. Tahap aktif dipilih OTOMATIS dari data: tetap di tahap sekarang sampai
+# ada minimal satu sampel yang memenuhi constraint tahap berikutnya, lalu pindah ke sana.
+# Paksa tahap tertentu dengan  --stage N  (1 = tahap 1, 2 = tahap 2) di `main.py suggest` / `main.py backtest`.
+#
+# TAHAP 1: rl_band_min_db = S11 TERBAIK di dalam pita 3,3-3,7 GHz (makin negatif makin baik).
+#   Nilainya selalu terdefinisi dan membaik mulus saat dip resonansi bergerak ke dalam pita, jadi
+#   GPR punya gradien untuk dipelajari (BW langsung = 0 untuk sebagian besar sampel, sehingga datar).
+#   d_peak_fr_dbi = directivity di monitor terdekat frekuensi resonansi (penjaga pola radiasi).
+#   Gain (gain_fr_ieee_dbi) sengaja tidak dipakai sebagai constraint: >= 5 dBi untuk satu patch FR-4
+#   sulit tercapai (efisiensi radiasi di fr hanya sekitar 0,3-0,4); tentukan batasnya bersama pembimbing.
+# TAHAP 2: maksimalkan bandwidth dengan resonansi di dalam pita dan pencocokan terpenuhi.
+STAGES = [
+    {"name": "tahap1_match",
+     "objective": {"column": "rl_band_min_db", "goal": "min"},
+     "constraints": [
+         {"column": "d_peak_fr_dbi", "op": ">=", "value": 4.0},
+     ]},
+    {"name": "tahap2_bandwidth",
+     "objective": {"column": "bw_mhz", "goal": "max"},
+     "constraints": [
+         {"column": "fr_ghz",         "op": ">=", "value": BAND_GHZ[0]},   # batas pita hanya di BAND_GHZ
+         {"column": "fr_ghz",         "op": "<=", "value": BAND_GHZ[1]},
+         {"column": "rl_band_min_db", "op": "<=", "value": RL_LIMIT_DB},
+         {"column": "d_peak_fr_dbi",  "op": ">=", "value": 4.0},
+     ]},
+    # Syarat pindah tahap 1 -> 2 (default = constraint tahap 2) bisa diganti per tahap dengan
+    # kunci "advance_when": [ ...daftar constraint... ].
+]
+
+
+# ---------------------------------------------------------------- informasi substrat (dipakai make_seeds.py)
+# [GANTI] diisi dari argumen --er --tand --h --material di tools/new_design.py
+SUBSTRATE = {"material": "FR-4 (lossy)", "er": 4.3, "tand": 0.025, "h": 1.6}
+
+# ---------------------------------------------------------------- model turunan (opsional)
+# gain = D + 10 log10(eta), dimodelkan dari D dan eta terpisah. Aktifkan dengan USE_COMPOSITES = True atau --composite.
+COMPOSITES = {"gain_fr_ieee_dbi": [("d_peak_fr_dbi", 1.0, "none"), ("eta_rad_fr", 10.0, "log10")]}
+USE_COMPOSITES = False
+
+# ---------------------------------------------------------------- fokus manual (opsional)
+# Dipilih dengan  py main.py suggest --focus NAMA  (menggantikan pergantian tahap otomatis). Batas constraint dapat
+# diganti lewat  --constraint "bw_mhz>=100". Semua fokus berbagi dataset dan model yang sama.
+_IN_BAND = [{"column": "fr_ghz", "op": ">=", "value": BAND_GHZ[0]},
+            {"column": "fr_ghz", "op": "<=", "value": BAND_GHZ[1]},
+            {"column": "rl_band_min_db", "op": "<=", "value": RL_LIMIT_DB},
+            {"column": "d_peak_fr_dbi", "op": ">=", "value": 4.0}]
+FOCI = {
+    "bw": {"objective": {"column": "bw_mhz", "goal": "max"}, "constraints": _IN_BAND},
+    "cover": {"objective": {"column": "band_cover_pct", "goal": "max"}, "constraints": _IN_BAND},
+    "match": {"objective": {"column": "rl_band_min_db", "goal": "min"},
+              "constraints": [c for c in _IN_BAND if c["column"] in ("fr_ghz", "d_peak_fr_dbi")]},
+    "gain": {"objective": {"column": "gain_fr_ieee_dbi", "goal": "max"},
+             "constraints": _IN_BAND + [{"column": "bw_mhz", "op": ">=", "value": 100.0}]},
+}
+
+
+# ---------------------------------------------------------------- konfigurasi sisi CST (dibaca cstopt/cst/config.py)
+# Nilai identik dengan konstanta lama di cstopt/cst/batch.py dan export.py. MON_* harus sama dengan FF_F_* di macro CST.
+# [GANTI] nilai parameter di project CST (baseline); batch.py mengembalikan model ke nilai ini setelah selesai.
+# Isi dari nilai parameter project CST Anda; bila dibiarkan nilai FR-4, model CST akan dipulihkan ke baseline FR-4.
+BASE_PARAMS = dict(Lp=20.22, Wp=26.33, LU=10.0, WU=10.5, gU=0.6, PU=2.0, LI=6.15, LD=3.0, WD=3.0, gD=0.3, PD=0.0)
+# Parameter ekstra (bukan geometri BO) yang boleh muncul di CSV sampel, beserta nilai baseline di CST.
+# Wf = lebar saluran 50 ohm: hitung dengan  py tools/wf50.py --er <er> --h <h>
+EXTRA_BASE = {"hs": 1.6, "Wf": 3.11}
+CST = {"band_ghz": (3.3, 3.7), "rl_limit_db": -10.0, "f0_ghz": 3.5, "monitors_ghz": (2.5, 4.5, 0.25),
+       "bw_min_mhz": 200.0, "gain_min_dbi": 5.0}
+
+
+# monitors_ghz = (awal, akhir, langkah) frekuensi monitor farfield; harus sama dengan FF_F_* di macro CST.
+# bw_min_mhz dan gain_min_dbi = ambang target proposal untuk laporan (`report`), bukan constraint BO.
+
+
+# ---------------------------------------------------------------- fitur turunan dari kurva (opsional)
+def features(df, d):
+    """Hook opsional: tambahkan kolom turunan ke df dan kembalikan df (jumlah baris sama, urutan sama).
+
+    Dipanggil oleh cstopt.ml.core.load_dataset. Bawaan di sini = fitur kurva S11 yang dipakai FR-4
+    (rl_band_min/max/mean_db, n_dips, dip_dist_ghz, dip_nearest_db). Ganti untuk antena yang butuh fitur lain,
+    dan daftarkan nama kolom barunya di TARGETS agar dimodelkan GPR. Hapus fungsi ini bila tidak perlu
+    fitur turunan sama sekali (kolom di dataset dipakai apa adanya).
+    """
+    from cstopt.ml.core import add_s11_features
+    return add_s11_features(df, d)
+
+
+# ---------------------------------------------------------------- parameter diskret dan turunan (opsional; P2-5, belum dipakai BO)
+# DISCRETE = {"hs": [1.6, 2.0, 2.4]}                          # nilai laminat yang tersedia
+# DERIVED = {"Wf": lambda p: wf50(4.3, p["hs"])}              # kolom turunan dari parameter lain
