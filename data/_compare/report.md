@@ -2,8 +2,8 @@
 
 ## 1. Informasi reproduksi
 
-- Tanggal: 2026-11-13
-- Commit git: 9d722a68c9e0d348ddae2bf41287b935ff2930d5
+- Tanggal: 2026-11-16
+- Commit git: e7e54d45a75f67fe99c08d1113d7320bdc33b48e
 - Paket: Python 3.10.0, numpy 2.2.6, pandas 2.3.3, sklearn 1.7.2, scipy 1.15.3, matplotlib 3.10.9
 - Sampel per run: MicrostripAntena 156 sampel; MicrostripAntena_RO4350B 185 sampel
 - Syarat dasar: fr 3.3 sampai 3.7 GHz dan RL minimum <= -10 dB; desain terbaik dipilih dengan memaksimalkan bw_mhz
@@ -172,6 +172,10 @@ Parity GPR (MicrostripAntena):
 
 ![Parity GPR MicrostripAntena](report_MicrostripAntena_gpr_parity.png)
 
+Validasi maju (MicrostripAntena):
+
+![Validasi maju MicrostripAntena](report_MicrostripAntena_forward_validation.png)
+
 Backtest BO vs acak (MicrostripAntena):
 
 ![Backtest BO vs acak MicrostripAntena](report_MicrostripAntena_bo_backtest.png)
@@ -188,9 +192,13 @@ Backtest BO vs acak (MicrostripAntena_RO4350B):
 
 ![Backtest BO vs acak MicrostripAntena_RO4350B](report_MicrostripAntena_RO4350B_bo_backtest.png)
 
+Sensitivitas ARD dan Sobol (MicrostripAntena_RO4350B):
+
+![Sensitivitas ARD dan Sobol MicrostripAntena_RO4350B](report_MicrostripAntena_RO4350B_sensitivity.png)
+
 ## 8. Catatan otomatis
 
 - Front MicrostripAntena (BW) belum representatif: hanya 4 titik (minimal 6).
 - Front MicrostripAntena (cakupan pita) belum representatif: hanya 5 titik (minimal 6).
-- Validasi maju (MicrostripAntena): forward_validation.png belum ada di C:\Users\User\Playground\CST_Auto\data\MicrostripAntena\figures (jalankan train, validate, atau backtest).
+- Sensitivitas ARD dan Sobol (MicrostripAntena): sensitivity.png belum ada di C:\Users\User\Playground\CST_Auto\data\MicrostripAntena\figures (jalankan train, validate, backtest, atau sensitivity).
 - MicrostripAntena: 2 sampel punya fr menempel di tepi sweep; resonansi sebenarnya mungkin di luar rentang sweep.
