@@ -313,14 +313,14 @@ def main():
         dn = designs.get(r)
         fdir = mc.load_design(dn).figures_dir if dn else os.path.join(paths.run_dir(r), "figures")
         for src, cap in (("gpr_parity.png", "Parity GPR"), ("forward_validation.png", "Validasi maju"),
-                         ("bo_backtest.png", "Backtest BO vs acak")):
+                         ("bo_backtest.png", "Backtest BO vs acak"), ("sensitivity.png", "Sensitivitas ARD dan Sobol")):
             sp = os.path.join(fdir, src)
             if os.path.exists(sp):
                 fn = f"report_{r}_{src}"
                 shutil.copyfile(sp, os.path.join(args.out_dir, fn))
                 md += [f"{cap} ({r}):", "", f"![{cap} {r}]({fn})", ""]
             else:
-                notes.append(f"{cap} ({r}): {src} belum ada di {fdir} (jalankan train, validate, atau backtest).")
+                notes.append(f"{cap} ({r}): {src} belum ada di {fdir} (jalankan train, validate, backtest, atau sensitivity).")
 
     for r in runs:
         df = data[r]

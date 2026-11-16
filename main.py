@@ -16,6 +16,7 @@ Perintah:
   backtest   uji BO vs pencarian acak pada data yang ada
   pareto     kurva Pareto BW dan gain (dan cakupan pita) dari satu atau lebih run
   validate   validasi maju GPR: bias, kalibrasi PoF, akurasi di wilayah kerja, saran margin
+  sensitivity sensitivitas model: relevansi ARD dan indeks Sobol (S1, ST)
   report     susun laporan otomatis (report.md dan gambar) dari data yang ada
 
 Setiap perintah punya opsi sendiri:  py main.py suggest -h
@@ -41,6 +42,7 @@ COMMANDS = {
     "backtest": "cstopt.ml.backtest",
     "pareto": "cstopt.report.pareto",
     "validate": "cstopt.ml.validate",
+    "sensitivity": "cstopt.ml.sensitivity",
     "report": "cstopt.report.report",
 }
 CST_ONLY = {"run", "export"}
