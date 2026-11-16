@@ -25,6 +25,7 @@ import numpy as np                 # noqa: E402
 import pandas as pd                # noqa: E402
 
 from cstopt.ml import core as mc   # noqa: E402
+from cstopt.ml import pof_alt      # noqa: E402
 
 BIN_EDGES = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0000001]
 
@@ -59,6 +60,9 @@ def main():
     ap.add_argument("--min-train", type=int, default=None, help="minimal sampel latih per batch (default N_INITIAL desain)")
     ap.add_argument("--split", type=int, default=None, metavar="N", help="satu pembagian: latih id <= N, uji id > N")
     ap.add_argument("--max-id", type=int, default=None, help="abaikan sampel dengan id lebih besar dari ini (untuk mereproduksi uji lama)")
+    ap.add_argument("--pof-compare", action="store_true",
+                    help="P2-3 (offline): bandingkan PoF perkalian regresi dengan klasifikator langsung dan model dua bagian BW; "
+                         "menulis models/pof_compare.csv; tidak mengubah keluaran lain")
     ap.add_argument("--kernel", default="rbf", choices=["rbf", "matern52"])
     ap.add_argument("--restarts", type=int, default=2)
     ap.add_argument("--seed", type=int, default=0)
@@ -101,7 +105,7 @@ def main():
     print(f"Tahap/fokus: {d.stage_name} | objective {d.objective['goal']} {oc} | constraint: "
           f"{[(c['column'], c['op'], c['value']) for c in d.constraints]}")
 
-    rows, pof_all, pof_col = [], [], {}
+    rows, pof_all, pof_col, alt_parts = [], [], {}, []
     cons_cols = list(dict.fromkeys(c["column"] for c in d.constraints))
     for b, g in enumerate(groups):
         tr, te = df.iloc[:g[0]], df.iloc[g]
@@ -116,6 +120,8 @@ def main():
         pof = mc.acquisition(d, models, Xu, None, 0.0)[2]
         pc = {c: pof_subset(d, models, Xu, [x for x in d.constraints if x["column"] == c]) for c in cons_cols}
         feas = mc.feasible_mask(d, te)
+        if args.pof_compare:
+            alt_parts.append(pof_alt.batch_predict(d, models, tr, te, Xu, pof, args.kernel, args.restarts, args.seed))
         for k in range(len(te)):
             r = {"sample_id": int(te[d.id_col].iloc[k]), "batch": b + 1, "n_latih": len(tr),
                  "pof_model": float(pof[k]), "feasible_aktual": int(feas[k])}
@@ -214,6 +220,11 @@ def main():
     out_csv = os.path.join(d.models_dir, "forward_validation.csv")
     os.makedirs(d.models_dir, exist_ok=True)
     V.round(5).to_csv(out_csv, index=False)
+    if args.pof_compare and alt_parts:
+        A = pd.concat(alt_parts, ignore_index=True)
+        A.round(5).to_csv(os.path.join(d.models_dir, "pof_compare.csv"), index=False)
+        pof_alt.report(A)
+        print(f"Tabel per sampel: {os.path.join(d.models_dir, 'pof_compare.csv')}")
 
     # gambar: reliabilitas dan bias per batch
     show = cols[:5]

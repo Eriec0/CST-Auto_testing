@@ -41,9 +41,17 @@ def main():
     ap.add_argument("--restarts", type=int, default=2)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--xi", type=float, default=0.01)
+    ap.add_argument("--region-auto", default=None, metavar="K:MARGIN",
+                    help="batasi pilihan ke region otomatis di sekitar K desain terbaik (seperti suggest --region-auto)")
+    ap.add_argument("--region-adapt", action="store_true", help="batasi pilihan ke trust region adaptif (P2-4)")
+    ap.add_argument("--adapt-every", type=int, default=5,
+                    help="region dihitung ulang tiap N evaluasi (meniru satu batch suggest; default 5)")
     ap.add_argument("--stage", type=int, default=None,
                     help="paksa tahap BO (1, 2, ...); default: dipilih otomatis dari data")
     args = ap.parse_args()
+    if args.region_auto and args.region_adapt:
+        ap.error("pilih salah satu: --region-auto atau --region-adapt")
+    mode = "adapt" if args.region_adapt else ("auto" if args.region_auto else "none")
 
     d = mc.load_design(args.design)
     if args.stage is not None:
@@ -65,20 +73,40 @@ def main():
 
     rng_master = np.random.default_rng(args.seed)
     bo_curves, rd_curves = [], []
+    sides, n_fallback, n_steps_total = [], 0, 0
+    Pall = df[d.params].values.astype(float)
     for rep in range(args.reps):
         rng = np.random.default_rng(rng_master.integers(1 << 31))
         init = list(rng.choice(n, args.n0, replace=False))
         # --- BO
         sel = list(init)
-        for _ in range(steps):
+        reg, state, side_traj = None, None, []
+        for step in range(steps):
             sub = df.iloc[sel].reset_index(drop=True)
             models = mc.fit_models(d, sub, cols, args.kernel, args.restarts, int(rng.integers(1 << 31)))
             f_best, _ = mc.best_feasible(d, sub)
             xi = args.xi * float(np.nanstd(sub[oc].values))
             rest = np.array([i for i in range(n) if i not in set(sel)])
+            if mode != "none":
+                if step % args.adapt_every == 0:            # region ditetapkan per batch, seperti satu panggilan suggest
+                    if mode == "adapt":
+                        reg, state, _ = mc.region_adapt(d, sub, state, xi)
+                        side_traj.append(state["side"])
+                    else:
+                        k_, m_ = args.region_auto.split(":")
+                        reg = mc.region_auto(d, sub, int(k_), float(m_))
+                inreg = np.ones(len(rest), bool)
+                for j, p in enumerate(d.params):
+                    inreg &= (Pall[rest, j] >= reg[p][0] - 1e-9) & (Pall[rest, j] <= reg[p][1] + 1e-9)
+                n_steps_total += 1
+                if inreg.any():
+                    rest = rest[inreg]
+                else:
+                    n_fallback += 1                         # tidak ada sampel di region: pakai seluruh sisa kumpulan
             acq, _, _ = mc.acquisition(d, models, Xall[rest], f_best, xi)
             sel.append(int(rest[int(np.argmax(acq))]))
         bo_curves.append(best_curve(d, df, sel))
+        sides.append(side_traj)
         # --- acak
         rest = np.array([i for i in range(n) if i not in set(init)])
         rnd = list(init) + list(rng.permutation(rest)[:steps])
@@ -101,6 +129,24 @@ def main():
           "Bandingkan BO vs acak pada jumlah evaluasi yang sama;\nperbedaan kecil dengan ulangan sedikit "
           "belum bermakna (dataset ini punya satu titik terbaik yang menonjol).")
 
+    if mode != "none":
+        print(f"\nRegion ({mode}): pilihan dibatasi ke sampel di dalam region; fallback ke seluruh sisa kumpulan pada "
+              f"{n_fallback} dari {n_steps_total} langkah ({100 * n_fallback / max(n_steps_total, 1):.0f}%).")
+        print(f"Catatan: kumpulan sampel diskret dan sudah terkumpul dekat desain terbaik; replay ini hanya uji kewajaran, "
+              f"bukan pembuktian untuk ruang kontinu.")
+    if mode == "adapt":
+        arr = np.array(sides, float)
+        print("Lintasan sisi region (median antar ulangan, per batch): " + ", ".join(f"{v:.2f}" for v in np.median(arr, axis=0))
+              + f" | min {arr.min():.2f}, maks {arr.max():.2f}")
+    tag = "" if mode == "none" else f"_region_{mode}"
+    os.makedirs(d.models_dir, exist_ok=True)
+    import pandas as pd
+    pd.DataFrame({"evaluasi": np.arange(1, bo.shape[1] + 1), "bo_median": np.nanmedian(bo, axis=0),
+                  "bo_q25": np.nanpercentile(bo, 25, axis=0), "bo_q75": np.nanpercentile(bo, 75, axis=0),
+                  "bo_capai_optimum_pct": [100 * np.mean(np.isclose(bo[:, k], opt, atol=1e-6)) for k in range(bo.shape[1])],
+                  "acak_median": np.nanmedian(rd, axis=0)}).round(4).to_csv(
+        os.path.join(d.models_dir, f"backtest{tag}.csv"), index=False)
+
     x = np.arange(1, bo.shape[1] + 1)
     fig, ax = plt.subplots(figsize=(6.6, 4.2))
     for arr, lab, c in ((bo, "BO (GPR + cEI)", "C0"), (rd, "acak", "C1")):
@@ -116,7 +162,7 @@ def main():
     ax.set_title(f"Backtest ({args.reps} ulangan; garis=median, area=IQR)")
     fig.tight_layout()
     os.makedirs(d.figures_dir, exist_ok=True)
-    path = os.path.join(d.figures_dir, "bo_backtest.png")
+    path = os.path.join(d.figures_dir, f"bo_backtest{tag}.png")
     fig.savefig(path, dpi=130)
     print(f"\nGambar: {path}")
 

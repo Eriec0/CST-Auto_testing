@@ -46,7 +46,7 @@ curves/ eff/ ff/, samples/, models/, figures/); `macros/` (VBA, setup terpisah);
 | `lhs`, `run`, `qc`, `curves`, `train`, `suggest`, `backtest` | tahap alur; opsi: `-h` |
 | `pareto` | kurva Pareto BW vs gain dan cakupan vs gain dari semua run (`data/_compare/pareto.png` dan `_front.csv`); juga tombol di GUI tab 6 |
 | `run` (butuh CST) | `--samples CSV --auto-yes --limit N --run-name NAMA`; kolom hs/Wf/lossTan di CSV otomatis jadi parameter ekstra |
-| `suggest` | `-q 5 --seed 0 --restarts 2 --pool 8192`; opsi lanjutan: `--focus --constraint --region --region-auto --margin --calibrate --composite` |
+| `suggest` | `-q 5 --seed 0 --restarts 2 --pool 8192`; opsi lanjutan: `--focus --constraint --region --region-auto --margin --calibrate --composite --sweep --diversity R --region-adapt` (`--sweep "gain_fr_ieee_dbi=4.0:5.4"`: satu batas constraint per kandidat, butuh `--focus`; `--diversity R`: penalti lunak jarak antar kandidat, efektif bila R > 0,3, mis. 0,4; uji: `tools/test_p2.py [--mode diversity]`) |
 | `tools/make_seeds.py`, `tools/wf50.py`, `tools/smoke_test.py` | seed antar substrat; Wf 50 ohm; uji instalasi |
 | `tools/test_flow.py`, `tools/mock_run.py` | uji alur penuh tanpa CST (desain demo `_demo_analytic`); `mock_run` pengganti `run` untuk desain yang punya `mock_response`; panduan `docs/membuat_desain_baru.md` |
 | `tools/new_design.py NAMA [--from D] [--er --tand --h]` | buat `designs/NAMA.py` dari `designs/_template.py`; hook opsional `features(df, d)` di file desain menggantikan fitur S11 bawaan |
@@ -87,6 +87,9 @@ Keputusan: tetap FR-4 h = 1,6 mm untuk hasil FR-4; substrat kedua Rogers RO4350B
 lewat fokus (`--focus bw --constraint "gain_fr_ieee_dbi>=4.5"`, dst.), selalu bersama `--region-auto` dan `--margin fr_ghz=0.08`.
 
 Status (16 Nov 2026): BO RO4350B dibekukan pada 185 sampel; mesh dan toleransi desain 165, 180, 179 selesai. Rincian, perintah, dan daftar belum diketahui ada di `PROGRESS.md`.
+P2 sesi 1: P2-1 `--sweep` dan P2-2 `--diversity` selesai di sandbox (paketM); adopsi menunggu keputusan pengguna dan uji akhir (`PROGRESS.md` bagian 0).
+P2-4 `--region-adapt` selesai di sandbox (paketO): aman, manfaat tidak terbukti (replay kurang berdaya, fallback 87 sampai 92%); jangan diklaim sebagai perbaikan.
+P2-3 Tahap A selesai: PoF klasifikasi dan dua bagian BW TIDAK membantu (validasi maju FR-4 dan RO4350B; `validate --pof-compare`); tidak diadopsi, `suggest` tidak berubah.
 Berikutnya (lebar dulu): (a) P1-1 selesai (kode, tiga tahap); (b) pengguna: `sensitivity` RO4350B, `backtest` FR-4, `report`, `package_dataset`, commit, lalu tag rilis. P1-4 dan P0-3 (draf) selesai.
 Rincian di `PROGRESS.md`; per 16 November: 8 hari ke pembekuan fitur (24 November), laporan final 28 November, tenggat 1 Desember.
 Cabang git: restruktur sudah di-merge; pilot-h dan control-tand dibuat bertumpuk; paket BO v2 di cabang bo-v2. Cek `git branch -a` dan `git log --oneline -8`.
