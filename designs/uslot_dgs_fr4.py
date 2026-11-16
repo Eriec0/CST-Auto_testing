@@ -146,3 +146,12 @@ FOCI = {
     "gain": {"objective": {"column": "gain_fr_ieee_dbi", "goal": "max"},
              "constraints": _IN_BAND + [{"column": "bw_mhz", "op": ">=", "value": 100.0}]},
 }
+
+
+# ---------------------------------------------------------------- konfigurasi sisi CST (dibaca cstopt/cst/config.py)
+# Nilai identik dengan konstanta lama di cstopt/cst/batch.py dan export.py. MON_* harus sama dengan FF_F_* di macro CST.
+BASE_PARAMS = dict(Lp=20.22, Wp=26.33, LU=10.0, WU=10.5, gU=0.6, PU=2.0, LI=6.15, LD=3.0, WD=3.0, gD=0.3, PD=0.0)
+EXTRA_BASE = {"hs": 1.6, "Wf": 3.11}
+CST = {"band_ghz": (3.3, 3.7), "rl_limit_db": -10.0, "f0_ghz": 3.5, "monitors_ghz": (2.5, 4.5, 0.25),
+       "bw_min_mhz": 200.0, "gain_min_dbi": 5.0}
+

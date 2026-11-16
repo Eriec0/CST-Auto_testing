@@ -69,11 +69,7 @@ REQUIRED = ["StoreDoubleParameter", "full_history_rebuild", "SelectTreeItem",
 
 
 # ---------------------------------------------------------------- sampel LHS
-# Baseline parameter ekstra (dipakai untuk mengembalikan model setelah batch).
-# Loss tangent: nama `tand` ditolak CST (bentrok dengan nama objek VBA), jadi beberapa nama alternatif disediakan;
-# pakai SATU saja, sesuai nama yang diterima CST dan nama kolom di CSV sampel.
-LOSS_NAMES = ["lossTan", "dLoss", "tanDelta", "tdelta"]
-BASE_EXTRA = {"hs": 1.6, "Wf": 3.11, **{n: 0.025 for n in LOSS_NAMES}}
+BASE_EXTRA = {"hs": 1.6, "Wf": 3.11}      # baseline parameter ekstra (dipakai untuk mengembalikan model setelah batch)
 
 
 def activate_extras(names):
@@ -405,6 +401,8 @@ def validate_all(samples):
 def main():
     ap = argparse.ArgumentParser(description="Batch simulasi CST dari sampel LHS/BO")
     ap.add_argument("--project", default=None, help="file .cst yang sedang terbuka (default: dideteksi dari CST)")
+    ap.add_argument("--design", default=None,
+                    help="nama file di designs/ (default: dicocokkan dari --run-name atau --project, lalu desain bawaan)")
     ap.add_argument("--run-name", default=None,
                     help="nama folder keluaran di data/ (default: nama file project tanpa .cst)")
     ap.add_argument("--samples", default=None,
@@ -424,6 +422,10 @@ def main():
     ap.add_argument("--test-set", action="store_true", help="uji ganti parameter saja")
     ap.add_argument("--test-export", action="store_true", help="uji ekspor farfield saja")
     args = ap.parse_args()
+
+    from cstopt.cst import config as cfg          # konstanta CST dari file desain (P1-1)
+    hint = args.run_name or (os.path.splitext(os.path.basename(args.project))[0] if args.project else None)
+    design_mod = cfg.configure(args.design or cfg.design_for_run(hint), sys.modules[__name__])
 
     extras = [x.strip() for x in args.extra_params.split(",") if x.strip()]
     unknown = [x for x in extras if x not in BASE_EXTRA]
@@ -451,6 +453,7 @@ def main():
     if not check_api(m3d):
         return 1
     project = resolve_project(prj, args.project)
+    cfg.warn_project_mismatch(project, design_mod, args.design)
     rd = os.path.join(EXPORT_DIR, args.run_name) if args.run_name else ed.run_dir(project)
     out_csv = os.path.join(rd, CSV_NAME)
     args.samples = args.samples or os.path.join(rd, "samples", "lhs_samples.csv")

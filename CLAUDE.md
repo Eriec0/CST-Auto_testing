@@ -85,7 +85,7 @@ Keputusan: tetap FR-4 h = 1,6 mm untuk hasil FR-4; substrat kedua Rogers RO4350B
 lewat fokus (`--focus bw --constraint "gain_fr_ieee_dbi>=4.5"`, dst.), selalu bersama `--region-auto` dan `--margin fr_ghz=0.08`.
 
 Status (16 Nov 2026): BO RO4350B dibekukan pada 185 sampel; mesh dan toleransi desain 165, 180, 179 selesai. Rincian, perintah, dan daftar belum diketahui ada di `PROGRESS.md`.
-Berikutnya (lebar dulu): (a) P1-1 generalisasi desain (dikorbankan lebih dulu bila mundur); (b) pengguna: `sensitivity` RO4350B, `backtest` FR-4, `report`, `package_dataset`, commit, lalu tag rilis. P1-4 dan P0-3 (draf) selesai.
+Berikutnya (lebar dulu): (a) P1-1 tahap 2 dan 3 (tahap 1 selesai; dikorbankan lebih dulu bila mundur); (b) pengguna: `sensitivity` RO4350B, `backtest` FR-4, `report`, `package_dataset`, commit, lalu tag rilis. P1-4 dan P0-3 (draf) selesai.
 Rincian di `PROGRESS.md`; per 16 November: 8 hari ke pembekuan fitur (24 November), laporan final 28 November, tenggat 1 Desember.
 Cabang git: restruktur sudah di-merge; pilot-h dan control-tand dibuat bertumpuk; paket BO v2 di cabang bo-v2. Cek `git branch -a` dan `git log --oneline -8`.
 

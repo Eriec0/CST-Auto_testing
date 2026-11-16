@@ -6,11 +6,17 @@ Semua angka di bawah berasal dari keluaran perintah yang sudah dijalankan (log p
 ## 0. Sedang dikerjakan (Claude memperbarui bagian ini SEBELUM menulis kode dan setelah tiap tahap)
 
 - Tahap selesai: P1-4 (paketF.zip) dan P0-3 draf (paketG.zip): `docs/deviasi_proposal.md`, `docs/ringkasan_dosen.md`, `docs/progres_fr4.md` (diperbarui), `tools/package_dataset.py`
-- Tugas aktif berikutnya: P1-1 generalisasi desain (konstanta CST dipindah ke file desain dengan nilai bawaan; uji dengan paket `cst` tiruan). Status: belum mulai; baca `RENCANA_LANJUTAN.md` bagian P1-1 dan inventaris `grep -n "PARAM_NAMES\|BASE\b\|BAND\|MON_\|BW_MIN\|GAIN_MIN\|check_geometry" cstopt/cst/*.py`
+- Tugas aktif berikutnya: P1-1 generalisasi desain, tiga tahap kecil; tiap tahap berakhir dengan zip ke pengguna, dan bagian ini diperbarui sebelum dan sesudahnya
+  - Tahap 1 SELESAI (paketI.zip): `cstopt/cst/config.py` (`configure`, `design_for_run`, `warn_project_mismatch`), `batch.py` dan `export.py` memakai opsi `--design` dan membaca konstanta dari file desain (nilai lama tetap bawaan),
+    `check_geometry` lama diganti `design.geometry_problems`, FR-4 `designs/uslot_dgs_fr4.py` kini memuat `BASE_PARAMS`, `EXTRA_BASE`, `CST`. Uji (modul `cst` tiruan): `run --check-samples` identik untuk CSV FR-4, seed RO, dan pilot h; `configure` dengan desain tiruan benar;
+    `suggest` seed 0 identik; `smoke_test` lulus. Perubahan perilaku yang disengaja: aturan geometri desain lebih ketat (CSV toleransi: 2 dari 12 baris tidak valid, dulu 1)
+  - Tahap 2 (langkah 3 dan 5): hook `d.mod.features(df, d)` di `ml/core.py` (bawaan: fitur S11 lama), `designs/_template.py`, `tools/new_design.py`. Uji: `suggest` seed 0 identik; desain baru dari scaffolder lolos `smoke_test.py`. Status: belum mulai
+  - Tahap 3 (langkah 6 dan 7): `docs/membuat_desain_baru.md`, `designs/_demo_analytic.py`, `tools/mock_run.py`; jalankan alur penuh offline (lhs, mock_run, train, suggest, pareto)
+  - Aturan per tahap: keluaran perintah dipotong pendek, tanpa listing besar; perbarui bagian ini; serahkan zip; baru mulai tahap berikutnya
 - Bila P1-1 mundur: dikorbankan lebih dulu sesuai gerbang keputusan; P2 hanya bila ada bukti offline
 - Tugas pengguna yang menunggu: jalankan `sensitivity` RO4350B dan `backtest` FR-4, jalankan ulang `report`, baca `docs/deviasi_proposal.md` dan `docs/ringkasan_dosen.md` (semua angka berasal dari data yang sudah dibahas; koreksi bila ada yang tidak cocok), `py tools\package_dataset.py --version v1.0-fr4-ro4350b`, isi lisensi, commit
 - Tag rilis `v1.0-fr4-ro4350b` dipasang pada commit akhir (sesudah P1-1 atau saat P1-1 diputuskan dilewati), bukan sekarang
-- Zip terakhir yang diserahkan ke pengguna: paketG.zip (P0-3)
+- Zip terakhir yang diserahkan ke pengguna: paketI.zip (P1-1 tahap 1); sebelumnya paketH.zip (rencana) dan paketG.zip (P0-3)
 
 ## 1. Cara melanjutkan di Claude lain
 
@@ -33,7 +39,7 @@ dimatikan untuk menghemat token, jadi file dan keluaran terminal dikirim lewat u
 | P0-2 A mesh rapat | selesai | sampel 165, 179, 180 lulus (selisih fr paling besar 2 MHz, BW 0,34%) |
 | P0-2 B toleransi | selesai | ketiga desain; hasil di bagian 3.3; sampel 126 tidak dijalankan (keputusan pengguna) |
 | P0-3 laporan dan rilis | selesai (draf) | `docs/deviasi_proposal.md`, `docs/ringkasan_dosen.md`, `tools/package_dataset.py`; sisa: pengguna membaca, `report`, commit, tag |
-| P1-1 generalisasi desain | ditunda | dikorbankan lebih dulu sesuai gerbang keputusan |
+| P1-1 generalisasi desain | tahap 1 dari 3 selesai | dikorbankan lebih dulu bila mundur; lihat bagian 0 |
 | P1-2 validasi maju | selesai | dijalankan pada RO4350B (185 sampel) dan FR-4 (156 sampel) |
 | P1-3 hypervolume dan Pareto | selesai | `cstopt/report/pareto.py` |
 | P1-4 sensitivitas dan aturan berhenti | selesai (kode) | `py main.py sensitivity`; backtest FR-4 dan sensitivitas RO4350B dijalankan pengguna (bagian 4) |
@@ -142,6 +148,7 @@ Opsional: satu atau dua ronde FR-4 `--focus gain --constraint "bw_mhz>=150"` (fr
 - Belum diverifikasi (saran AI lain): `hs+` dominan pada kegagalan gain 165, spesifikasi ketebalan RO4350B +/-5%, dan gain minimum sekitar 4,90 bila toleransi +/-5%. Hasil perintah penelusuran skenario gain 165 belum dikirim ke Claude, dan pada data 179 `hs+` justru menaikkan gain (+0,27 dB), jadi arah dugaannya perlu dicek. Klaim yang aman: gain 4,81 sampai 5,09 dBi pada toleransi yang diuji.
 - Skenario yang dilewati karena geometri (8 dari 28 pada 165; 5 dari 28 pada 179): ketahanan terhadap sisi itu tidak teruji.
 - Nilai mesh lama dan baru serta nilai BOUNDS akhir RO4350B tidak dikirim ke Claude; catat di naskah.
+- P1-1 tahap 1 hanya diuji dengan modul `cst` tiruan (`--check-samples`); `run` penuh di CST nyata, `export.main --design`, dan peringatan nama project belum dijalankan di CST. Baseline `BASE_PARAMS` desain RO4350B belum diketahui: tanpa atribut itu `batch.py` mengembalikan model ke baseline FR-4 (perilaku lama); isi dari nilai parameter project RO4350B Anda.
 - GUI Windows tidak disentuh.
 
 ## 7. Jangan menulis di laporan
