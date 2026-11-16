@@ -48,6 +48,8 @@ curves/ eff/ ff/, samples/, models/, figures/); `macros/` (VBA, setup terpisah);
 | `run` (butuh CST) | `--samples CSV --auto-yes --limit N --run-name NAMA`; kolom hs/Wf/lossTan di CSV otomatis jadi parameter ekstra |
 | `suggest` | `-q 5 --seed 0 --restarts 2 --pool 8192`; opsi lanjutan: `--focus --constraint --region --region-auto --margin --calibrate --composite` |
 | `tools/make_seeds.py`, `tools/wf50.py`, `tools/smoke_test.py` | seed antar substrat; Wf 50 ohm; uji instalasi |
+| `tools/test_flow.py`, `tools/mock_run.py` | uji alur penuh tanpa CST (desain demo `_demo_analytic`); `mock_run` pengganti `run` untuk desain yang punya `mock_response`; panduan `docs/membuat_desain_baru.md` |
+| `tools/new_design.py NAMA [--from D] [--er --tand --h]` | buat `designs/NAMA.py` dari `designs/_template.py`; hook opsional `features(df, d)` di file desain menggantikan fitur S11 bawaan |
 
 Satu project CST = satu `RUN_NAME` = satu folder `data/<RUN>/`. Desain dipilih dengan `--design nama` (tanpa .py), bawaan `uslot_dgs_fr4`.
 BO: tahap otomatis (Tahap 1 minimalkan rl_band_min_db sampai ada sampel feasible, lalu Tahap 2 maksimalkan bw_mhz); atau fokus manual dari `FOCI`.
@@ -85,7 +87,7 @@ Keputusan: tetap FR-4 h = 1,6 mm untuk hasil FR-4; substrat kedua Rogers RO4350B
 lewat fokus (`--focus bw --constraint "gain_fr_ieee_dbi>=4.5"`, dst.), selalu bersama `--region-auto` dan `--margin fr_ghz=0.08`.
 
 Status (16 Nov 2026): BO RO4350B dibekukan pada 185 sampel; mesh dan toleransi desain 165, 180, 179 selesai. Rincian, perintah, dan daftar belum diketahui ada di `PROGRESS.md`.
-Berikutnya (lebar dulu): (a) P1-1 tahap 2 dan 3 (tahap 1 selesai; dikorbankan lebih dulu bila mundur); (b) pengguna: `sensitivity` RO4350B, `backtest` FR-4, `report`, `package_dataset`, commit, lalu tag rilis. P1-4 dan P0-3 (draf) selesai.
+Berikutnya (lebar dulu): (a) P1-1 selesai (kode, tiga tahap); (b) pengguna: `sensitivity` RO4350B, `backtest` FR-4, `report`, `package_dataset`, commit, lalu tag rilis. P1-4 dan P0-3 (draf) selesai.
 Rincian di `PROGRESS.md`; per 16 November: 8 hari ke pembekuan fitur (24 November), laporan final 28 November, tenggat 1 Desember.
 Cabang git: restruktur sudah di-merge; pilot-h dan control-tand dibuat bertumpuk; paket BO v2 di cabang bo-v2. Cek `git branch -a` dan `git log --oneline -8`.
 
@@ -98,6 +100,8 @@ Cabang git: restruktur sudah di-merge; pilot-h dan control-tand dibuat bertumpuk
 - Prediksi cakupan pita di atas sekitar 45% tidak realistis (BW pecahan sekitar 5%); fokus gain dan cakupan tanpa region menghasilkan ekstrapolasi GP ekstrem.
 - Opsi lanjutan BO mati secara bawaan: `suggest` tanpa opsi harus identik dengan versi sebelumnya (uji dengan `tools/compare_csv.py`, seed 0).
 - `bo_suggest.py` lama menyebut `batch_trial_LHS.py`; nama yang benar `py main.py run`.
+
+- `qc` kini memakai `PARAM_NAMES` desain (`--design` atau dicocokkan dari `--run-name`); dulu 11 nama FR-4 tertanam. Desain berawalan garis bawah (`_template`, `_demo_analytic`) tidak muncul di `list_designs` dan hanya bisa dipilih lewat `--design`.
 
 ## 8. Cara bekerja dan menguji di sandbox
 

@@ -6,17 +6,56 @@ Semua angka di bawah berasal dari keluaran perintah yang sudah dijalankan (log p
 ## 0. Sedang dikerjakan (Claude memperbarui bagian ini SEBELUM menulis kode dan setelah tiap tahap)
 
 - Tahap selesai: P1-4 (paketF.zip) dan P0-3 draf (paketG.zip): `docs/deviasi_proposal.md`, `docs/ringkasan_dosen.md`, `docs/progres_fr4.md` (diperbarui), `tools/package_dataset.py`
-- Tugas aktif berikutnya: P1-1 generalisasi desain, tiga tahap kecil; tiap tahap berakhir dengan zip ke pengguna, dan bagian ini diperbarui sebelum dan sesudahnya
+- Tugas aktif berikutnya: P1-1 generalisasi desain, tiga tahap kecil, SEMUA SELESAI (kode); sisa: pengguna menjalankan (lihat bawah); tiap tahap berakhir dengan zip ke pengguna, dan bagian ini diperbarui sebelum dan sesudahnya
   - Tahap 1 SELESAI (paketI.zip): `cstopt/cst/config.py` (`configure`, `design_for_run`, `warn_project_mismatch`), `batch.py` dan `export.py` memakai opsi `--design` dan membaca konstanta dari file desain (nilai lama tetap bawaan),
     `check_geometry` lama diganti `design.geometry_problems`, FR-4 `designs/uslot_dgs_fr4.py` kini memuat `BASE_PARAMS`, `EXTRA_BASE`, `CST`. Uji (modul `cst` tiruan): `run --check-samples` identik untuk CSV FR-4, seed RO, dan pilot h; `configure` dengan desain tiruan benar;
     `suggest` seed 0 identik; `smoke_test` lulus. Perubahan perilaku yang disengaja: aturan geometri desain lebih ketat (CSV toleransi: 2 dari 12 baris tidak valid, dulu 1)
-  - Tahap 2 (langkah 3 dan 5): hook `d.mod.features(df, d)` di `ml/core.py` (bawaan: fitur S11 lama), `designs/_template.py`, `tools/new_design.py`. Uji: `suggest` seed 0 identik; desain baru dari scaffolder lolos `smoke_test.py`. Status: belum mulai
-  - Tahap 3 (langkah 6 dan 7): `docs/membuat_desain_baru.md`, `designs/_demo_analytic.py`, `tools/mock_run.py`; jalankan alur penuh offline (lhs, mock_run, train, suggest, pareto)
+  - Tahap 2 SELESAI (paketJ.zip): `cstopt/ml/core.py` (`load_dataset` memanggil `d.mod.features(df, d)` bila ada; bila tidak ada, fitur S11 lama seperti semula; hasil hook harus DataFrame dengan jumlah baris sama, jika tidak `ValueError`), `designs/_template.py` (semua antarmuka, bagian [GANTI] ditandai, `features` bawaan mendelegasikan ke `add_s11_features`), `tools/new_design.py` (`py tools\new_design.py NAMA [--from desain] [--run-name] [--material --er --tand --h]`: mengganti NAME, RUN_NAME, SUBSTRATE, hs dan Wf di EXTRA_BASE (Wf Hammerstad), menolak nama tidak valid, file sudah ada, dan RUN_NAME yang dipakai desain lain, lalu mencetak daftar yang harus diperiksa).
+    Uji (sandbox, tanpa CST): `suggest -q 5 --seed 0 --restarts 2 --pool 8192` FR-4 IDENTIK dengan sebelum perubahan (`compare_csv.py`); hook delegasi ke `add_s11_features` menghasilkan DataFrame identik dengan jalur lama (156 x 45); hook kustom menambah kolom; hook yang mengembalikan baris salah ditolak; desain RO4350B (tanpa hook) tetap memuat 185 sampel; desain dari scaffolder (dari `_template` dan dari `uslot_dgs_ro4350b`) lolos `smoke_test.py` (SEMUA LULUS); berkas uji dihapus dari paket.
+    Catatan: scaffolder dari `_template` memberi BASE_PARAMS, PARAM_NAMES, BOUNDS FR-4 apa adanya (harus diganti pengguna); docstring `_template.py` merujuk `docs/membuat_desain_baru.md` yang baru dibuat di tahap 3.
+  - Tahap 3 SELESAI (paketK.zip): `designs/_demo_analytic.py` (patch resonan analitik 4 parameter L W g s, `mock_response(p, f)`), `tools/mock_run.py` (pengganti `run`: baris dibuat oleh `export.extract` asli dengan sumber kurva dan farfield diganti; resume, geometri tidak valid membatalkan batch, kolom ekstra ikut; memakai paket `cst` tiruan bila CST tidak ada), `tools/test_flow.py` (uji alur penuh sekali jalan, data di `data/DemoAnalytic/` dihapus di akhir), `docs/membuat_desain_baru.md`.
+    Temuan dan perbaikan dari uji alur: `qc` memuat 11 nama parameter FR-4 secara tetap dan gagal pada desain lain; kini memakai `PARAM_NAMES` desain (`cstopt/qc/dataset.py` opsi baru `--design`, `cstopt/loader.py` fungsi `module_for_run` tanpa impor CST). `.gitignore`: `data/DemoAnalytic/`.
+    Uji (sandbox): `tools/test_flow.py` SEMUA LULUS (lhs, mock_run, resume, qc, curves, train, 2 ronde suggest + mock_run, status, pareto, sensitivity, validate, report); `backtest` dan `report` pada data demo juga jalan; `qc` FR-4 dan RO4350B identik dengan versi lama (selisih hanya jalur folder); `suggest` seed 0 FR-4 IDENTIK; `smoke_test.py` SEMUA LULUS.
   - Aturan per tahap: keluaran perintah dipotong pendek, tanpa listing besar; perbarui bagian ini; serahkan zip; baru mulai tahap berikutnya
-- Bila P1-1 mundur: dikorbankan lebih dulu sesuai gerbang keputusan; P2 hanya bila ada bukti offline
+- P1-1 tidak mundur (selesai di sisi kode). P2 dikerjakan di percakapan lain, hanya bila ada bukti offline: lihat bagian 0A (urutan, cabang, gerbang) dan bagian 0B (status uji di komputer pengguna)
 - Tugas pengguna yang menunggu: jalankan `sensitivity` RO4350B dan `backtest` FR-4, jalankan ulang `report`, baca `docs/deviasi_proposal.md` dan `docs/ringkasan_dosen.md` (semua angka berasal dari data yang sudah dibahas; koreksi bila ada yang tidak cocok), `py tools\package_dataset.py --version v1.0-fr4-ro4350b`, isi lisensi, commit
 - Tag rilis `v1.0-fr4-ro4350b` dipasang pada commit akhir (sesudah P1-1 atau saat P1-1 diputuskan dilewati), bukan sekarang
-- Zip terakhir yang diserahkan ke pengguna: paketI.zip (P1-1 tahap 1); sebelumnya paketH.zip (rencana) dan paketG.zip (P0-3)
+- Zip terakhir yang diserahkan ke pengguna: paketK.zip (P1-1 tahap 3); sebelumnya paketJ.zip (tahap 2), paketI.zip (tahap 1), paketH.zip (rencana), paketG.zip (P0-3)
+
+## 0A. Alur P2 (dikerjakan di percakapan Claude lain; satu percakapan = satu sesi di bawah, urut)
+
+Prinsip: P2-1, P2-2, dan P2-4 sama-sama mengubah `cstopt/ml/suggest.py`, jadi TIDAK boleh dikerjakan paralel di percakapan berbeda (konflik merge). Kerjakan berurutan; tiap sesi satu cabang dari `main` terbaru, lalu di-merge ke `main` sebelum sesi berikutnya dimulai. Semua opsi baru mati secara bawaan: `suggest` tanpa opsi harus IDENTIK dengan sekarang (`tools/compare_csv.py`, seed 0, FR-4).
+
+| Sesi | Tugas | Cabang | File utama | Gerbang bukti (adopsi hanya bila terpenuhi; bila tidak, catat "tidak membantu" dan jangan di-merge sebagai fitur) | Status |
+|---|---|---|---|---|---|
+| 0 | prasyarat: merge cabang P1-1 (`p1-1-tahap2`, `p1-1-tahap3`, serta tahap 1) ke `main`, pengguna menjalankan bagian 0B | - | - | uji bagian 0B lulus di komputer pengguna | belum |
+| 1 | P2-1 `--sweep` + P2-2 `--diversity R` (satu sesi) | `p2-sweep-diversity` | `ml/suggest.py`, `main.py` | P2-1: lima kandidat punya gain prediksi berbeda dan terurut sesuai batas. P2-2: jarak minimum antar kandidat lebih besar dari tanpa opsi. Keduanya: tanpa opsi IDENTIK | belum |
+| 2 | P2-4 `--region-adapt` | `p2-region-adapt` | `ml/suggest.py`, `ml/backtest.py` | replay riwayat FR-4 lewat `backtest`: region bergerak masuk akal dan hasil tidak lebih buruk dari `--region-auto` | belum |
+| 3 | P2-3 PoF klasifikasi dan model dua bagian (UJI OFFLINE DULU lewat `validate`, jangan mengubah `suggest` sebelum ada bukti) | `p2-pof-classifier` | `ml/validate.py`, lalu `ml/core.py` bila lolos | Brier membaik lebih dari 10% dan kemiringan kalibrasi lebih dekat ke 1 pada validasi maju FR-4 DAN RO4350B. Bila lolos: opsi `--pof classifier` (bawaan tetap lama) | belum |
+| - | P2-5 h diskret dan parameter turunan | - | - | DILEWATI (butuh sekitar 30 simulasi CST, keuntungan paling banyak +10 sampai 15 MHz di FR-4) | dilewati |
+| - | P2-6 ParEGO | - | - | hanya bila P2-1 terbukti tidak cukup; kemungkinan besar dilewati | dilewati |
+
+Gerbang waktu: fitur P2 yang diadopsi harus sudah ter-merge ke `main` sebelum pembekuan fitur 24 November. Sesudahnya hanya perbaikan bug. Bila sesi 1 belum selesai pada 20 November, sesi 2 dan 3 dibatalkan (P0 dan laporan lebih penting). Setelah sesi terakhir: pengguna menjalankan bagian 0B lagi, jalankan ulang `report`, perbarui `docs/progres_fr4.md`, lalu pasang tag `v1.0-fr4-ro4350b` pada commit akhir.
+Aturan tiap sesi P2: tunjukkan rencana dan perhitungan lebih dulu; hasil uji dibandingkan opsi mati vs hidup pada data asli (bukan hanya "berjalan tanpa error"); perbarui bagian 0 dan tabel ini di akhir sesi; serahkan zip file berubah saja.
+
+## 0B. Status uji di komputer pengguna (Windows) dan tes akhir
+
+Semua uji di bagian 0 (tahap 1 sampai 3) dijalankan Claude di sandbox Linux tanpa CST. PENGGUNA BELUM menjalankan satupun di komputernya (diputuskan 16 November: tes dilakukan di akhir, setelah kode P2 selesai). Claude di percakapan lain: jangan menganggap kode ini sudah terbukti jalan di Windows atau CST.
+
+Uji offline (tanpa CST), jalankan di akhir setelah semua cabang ter-merge; semua BELUM dijalankan pengguna:
+1. `py tools\smoke_test.py` (harus SEMUA LULUS)
+2. `py tools\test_flow.py` (harus SEMUA LULUS), lalu uji `new_design.py` terpisah: `py tools\new_design.py uji_baru --er 3.66 --tand 0.0037 --h 1.524`, periksa `designs\uji_baru.py`, lalu hapus filenya
+3. Regresi: `py main.py suggest -q 5 --seed 0 --restarts 2 --pool 8192` sebelum dan sesudah merge, bandingkan dengan `py tools\compare_csv.py lama.csv baru.csv` (harus IDENTIK)
+4. `py main.py qc` dan `py main.py qc --run-name MicrostripAntena_RO4350B` (harus sama dengan sebelum P1-1 tahap 3)
+
+Uji dengan CST nyata (satu sesi di komputer pengguna, setelah uji offline lulus):
+5. `py main.py run --design uslot_dgs_ro4350b --check-samples` dan `run --limit 1` pada sampel yang sudah ada di data (hasil harus sama dengan baris lama; CST deterministik)
+6. Peringatan nama project (`warn_project_mismatch`) dengan project yang namanya sengaja berbeda
+7. `export.main --design`
+8. Isi `BASE_PARAMS` desain `uslot_dgs_ro4350b` dari nilai parameter project RO4350B sebelum langkah 5 (tanpa itu `batch.py` memulihkan baseline FR-4 setelah batch)
+9. GUI Windows: buka `py main.py`, periksa semua tab
+
+Hasil tiap uji dikirim ke Claude (keluaran dipotong pendek) lalu dicatat di bagian 6; yang gagal diperbaiki sebelum tag rilis.
 
 ## 1. Cara melanjutkan di Claude lain
 
@@ -24,7 +63,7 @@ Unggah: `CLAUDE.md`, `RENCANA_LANJUTAN.md`, file ini, dan `batch_lhs.csv` terbar
 (kirim folder `data/` tanpa `curves/`, `eff/`, `ff/` agar ringan). Lalu tempel prompt ini:
 
 > Baca CLAUDE.md (termasuk bagian 10), RENCANA_LANJUTAN.md, lalu PROGRESS.md (mulai dari bagian 0). Patuhi aturan hemat token (jangan baca data/, jangan listing repo; baca file lewat grep atau sed).
-> Lanjutkan dari bagian "Langkah berikutnya" di PROGRESS.md. Sebelum mengubah file, tunjukkan rencana singkat dan perhitungan, lalu tunggu persetujuan.
+> Lanjutkan dari bagian 0A (alur P2: ambil sesi berstatus "belum" pertama yang prasyaratnya terpenuhi) dan perhatikan bagian 0B (uji di komputer pengguna belum dijalankan). Sebelum mengubah file, tunjukkan rencana singkat dan perhitungan, lalu tunggu persetujuan.
 > Serahkan zip berisi file yang berubah saja, perintah PowerShell, hasil uji (termasuk regresi seed 0), dan daftar jujur yang belum teruji.
 
 Gaya kerja yang diinginkan pengguna: Bahasa Indonesia, ringkas; alur bertahap dengan persetujuan; perhitungan ditunjukkan sebelum file diubah; gambar PNG
@@ -39,12 +78,12 @@ dimatikan untuk menghemat token, jadi file dan keluaran terminal dikirim lewat u
 | P0-2 A mesh rapat | selesai | sampel 165, 179, 180 lulus (selisih fr paling besar 2 MHz, BW 0,34%) |
 | P0-2 B toleransi | selesai | ketiga desain; hasil di bagian 3.3; sampel 126 tidak dijalankan (keputusan pengguna) |
 | P0-3 laporan dan rilis | selesai (draf) | `docs/deviasi_proposal.md`, `docs/ringkasan_dosen.md`, `tools/package_dataset.py`; sisa: pengguna membaca, `report`, commit, tag |
-| P1-1 generalisasi desain | tahap 1 dari 3 selesai | dikorbankan lebih dulu bila mundur; lihat bagian 0 |
+| P1-1 generalisasi desain | selesai (kode, 3 tahap) | dikorbankan lebih dulu bila mundur; lihat bagian 0 |
 | P1-2 validasi maju | selesai | dijalankan pada RO4350B (185 sampel) dan FR-4 (156 sampel) |
 | P1-3 hypervolume dan Pareto | selesai | `cstopt/report/pareto.py` |
 | P1-4 sensitivitas dan aturan berhenti | selesai (kode) | `py main.py sensitivity`; backtest FR-4 dan sensitivitas RO4350B dijalankan pengguna (bagian 4) |
 | P1-5 generator laporan | selesai | `py main.py report` |
-| P2 semua | ditunda | hanya bila P0 dan P1 selesai dan ada bukti offline |
+| P2 semua | direncanakan, belum dikerjakan | urutan, cabang, dan gerbang bukti di bagian 0A; dikerjakan di percakapan lain |
 | Perbaikan `qc` | selesai | `qc --run-name RUN` jalan tanpa `lhs_samples.csv` |
 
 Kode yang sudah diserahkan: Paket A (`pareto.py`, `make_tolerance.py`, `analyze_tolerance.py`), Paket B (`validate.py`, `report.py`, `qc/dataset.py`, `main.py`), dan pembaruan `PROGRESS.md` dan `CLAUDE.md`.
@@ -149,6 +188,8 @@ Opsional: satu atau dua ronde FR-4 `--focus gain --constraint "bw_mhz>=150"` (fr
 - Skenario yang dilewati karena geometri (8 dari 28 pada 165; 5 dari 28 pada 179): ketahanan terhadap sisi itu tidak teruji.
 - Nilai mesh lama dan baru serta nilai BOUNDS akhir RO4350B tidak dikirim ke Claude; catat di naskah.
 - P1-1 tahap 1 hanya diuji dengan modul `cst` tiruan (`--check-samples`); `run` penuh di CST nyata, `export.main --design`, dan peringatan nama project belum dijalankan di CST. Baseline `BASE_PARAMS` desain RO4350B belum diketahui: tanpa atribut itu `batch.py` mengembalikan model ke baseline FR-4 (perilaku lama); isi dari nilai parameter project RO4350B Anda.
+- P1-1 tahap 2: `new_design.py` belum dijalankan di Windows (PowerShell); path memakai `os.path`, tetapi belum dibuktikan. Hook `features` belum diuji dengan desain nyata yang memakai fitur selain S11.
+- P1-1 tahap 3: model analitik demo tidak mewakili antena nyata (hanya menguji alur); `run` penuh dengan CST nyata untuk desain baru belum diuji; `qc --expect-eff` dan `--mon-step` tetap bawaan FR-4 (9 titik, 0,25 GHz) untuk desain dengan monitor lain.
 - GUI Windows tidak disentuh.
 
 ## 7. Jangan menulis di laporan

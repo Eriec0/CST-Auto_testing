@@ -46,3 +46,6 @@ Thumbs.db
 # folder pendamping project CST di cst_projects/ (hasil simulasi, besar)
 /cst_projects/*/
 data/**/*.lock
+
+# Data uji alur offline (tools/test_flow.py, desain demo)
+data/DemoAnalytic/

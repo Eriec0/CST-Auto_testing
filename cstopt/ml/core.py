@@ -217,7 +217,13 @@ def load_dataset(d):
     if miss:
         raise ValueError(f"Kolom tidak ada di dataset: {miss}")
     df = df.sort_values(d.id_col).reset_index(drop=True)
-    if d.band is not None and d.curves_dir:
+    custom = getattr(d.mod, "features", None)       # hook desain: features(df, d) -> df dengan kolom turunan
+    if callable(custom):
+        out = custom(df, d)
+        if not isinstance(out, pd.DataFrame) or len(out) != len(df):
+            raise ValueError(f"{d.mod.__name__}.features(df, d) harus mengembalikan DataFrame dengan {len(df)} baris")
+        df = out.reset_index(drop=True)
+    elif d.band is not None and d.curves_dir:      # bawaan: fitur kurva S11
         df = add_s11_features(df, d)
     d.activate(df)                       # pilih tahap BO aktif dari data (atau d.force_stage)
     need = [c for c in d.model_columns if c not in df.columns]
