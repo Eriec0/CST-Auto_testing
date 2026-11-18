@@ -12,6 +12,7 @@ import importlib.util
 import json
 import os
 import queue
+import re
 import subprocess
 import sys
 import threading
@@ -274,6 +275,9 @@ class App:
         self.bo_margin = tk.StringVar(value="")
         self.bo_calib = tk.BooleanVar(value=False)
         self.bo_comp = tk.BooleanVar(value=False)
+        self.bo_sweep = tk.StringVar(value="")
+        self.bo_div = tk.StringVar(value="")
+        self.bo_radapt = tk.BooleanVar(value=False)
         ttk.Label(top, text="Jumlah kandidat").pack(side="left")
         ttk.Spinbox(top, from_=1, to=20, textvariable=self.bo_q, width=4).pack(side="left", padx=(4, 12))
         ttk.Label(top, text="Kernel").pack(side="left")
@@ -291,24 +295,47 @@ class App:
         ttk.Label(adv, text="Constraint fokus").grid(row=0, column=2, sticky="w")
         ttk.Entry(adv, textvariable=self.bo_constraint, width=34).grid(row=0, column=3, sticky="ew", padx=4)
         ttk.Label(adv, text="Region manual").grid(row=1, column=0, sticky="w", pady=(4, 0))
-        ttk.Entry(adv, textvariable=self.bo_region, width=34).grid(row=1, column=1, columnspan=2, sticky="w", padx=4, pady=(4, 0))
+        self.e_region = ttk.Entry(adv, textvariable=self.bo_region, width=34)
+        self.e_region.grid(row=1, column=1, columnspan=2, sticky="w", padx=4, pady=(4, 0))
         ttk.Label(adv, text="atau otomatis K:margin").grid(row=1, column=2, sticky="e", pady=(4, 0))
-        ttk.Entry(adv, textvariable=self.bo_region_auto, width=12).grid(row=1, column=3, sticky="w", padx=4, pady=(4, 0))
+        self.e_region_auto = ttk.Entry(adv, textvariable=self.bo_region_auto, width=12)
+        self.e_region_auto.grid(row=1, column=3, sticky="w", padx=4, pady=(4, 0))
         ttk.Label(adv, text="Margin PoF").grid(row=2, column=0, sticky="w", pady=(4, 0))
         ttk.Entry(adv, textvariable=self.bo_margin, width=34).grid(row=2, column=1, columnspan=2, sticky="w", padx=4, pady=(4, 0))
         chk = ttk.Frame(adv)
         chk.grid(row=2, column=3, sticky="w", pady=(4, 0))
         ttk.Checkbutton(chk, text="Kalibrasi std", variable=self.bo_calib).pack(side="left", padx=(4, 12))
         ttk.Checkbutton(chk, text="Gain komposit", variable=self.bo_comp).pack(side="left")
-        ttk.Label(adv, foreground="#666", text="contoh: constraint bw_mhz>=120 | region Lp=16:19,WD=7:8 | region otomatis 8:0.15 | margin fr_ghz=0.08",
-                  ).grid(row=3, column=0, columnspan=4, sticky="w", pady=(4, 0))
+        ttk.Label(adv, text="Sweep batas").grid(row=3, column=0, sticky="w", pady=(4, 0))
+        ttk.Entry(adv, textvariable=self.bo_sweep, width=34).grid(row=3, column=1, columnspan=2, sticky="w", padx=4, pady=(4, 0))
+        sub = ttk.Frame(adv)
+        sub.grid(row=3, column=3, sticky="w", pady=(4, 0))
+        ttk.Label(sub, text="Diversity R").pack(side="left", padx=(4, 4))
+        ttk.Entry(sub, textvariable=self.bo_div, width=6).pack(side="left", padx=(0, 12))
+        ttk.Checkbutton(sub, text="Region adaptif", variable=self.bo_radapt, command=self._toggle_radapt).pack(side="left")
+        ttk.Label(adv, foreground="#666", wraplength=950, justify="left",
+                  text="contoh: constraint bw_mhz>=120 | region Lp=16:19,WD=7:8 | region otomatis 8:0.15 | margin fr_ghz=0.08 | "
+                       "sweep gain_fr_ieee_dbi=4.0:5.4 (butuh Fokus dan jumlah kandidat >= 2; satu batas per kandidat) | "
+                       "diversity 0.4 (R > 0.3 agar terasa) | region adaptif menggantikan region manual dan otomatis",
+                  ).grid(row=4, column=0, columnspan=4, sticky="w", pady=(4, 0))
         bar = ttk.Frame(t)
         bar.grid(row=2, column=0, sticky="w", pady=8)
+        bar_a = ttk.Frame(bar)
+        bar_a.pack(anchor="w")
         for text, fn in [("Usulkan kandidat", self.do_suggest), ("Kurva konvergensi", self.do_report), ("Uji BO vs acak (backtest)", self.do_backtest)]:
-            b = ttk.Button(bar, text=text, command=fn)
+            b = ttk.Button(bar_a, text=text, command=fn)
             b.pack(side="left", padx=(0, 8))
             self.buttons.append(b)
-        ttk.Button(bar, text="Pakai kandidat di tab 2", command=self.use_candidates).pack(side="left", padx=(8, 0))
+        ttk.Button(bar_a, text="Pakai kandidat di tab 2", command=self.use_candidates).pack(side="left", padx=(8, 0))
+        bar_b = ttk.Frame(bar)
+        bar_b.pack(anchor="w", pady=(6, 0))
+        ttk.Label(bar_b, text="Analisis model:").pack(side="left", padx=(0, 8))
+        for text, fn in [("Validasi maju", self.do_validate), ("Validasi + bandingkan PoF (lambat)", self.do_validate_pof),
+                         ("Sensitivitas (ARD, Sobol)", self.do_sensitivity)]:
+            b = ttk.Button(bar_b, text=text, command=fn)
+            b.pack(side="left", padx=(0, 8))
+            self.buttons.append(b)
+        ttk.Button(bar_b, text="Rentang parameter...", command=self.open_bounds).pack(side="left", padx=(8, 0))
         ttk.Label(t, textvariable=self.warn_var, foreground="#b45f06", wraplength=1000).grid(row=3, column=0, sticky="w")
         cbox = ttk.Frame(t)
         cbox.grid(row=4, column=0, sticky="nsew", pady=(4, 0))
@@ -327,14 +354,30 @@ class App:
         top = ttk.Frame(t)
         top.grid(row=0, column=0, sticky="w")
         self.fig_var = tk.StringVar()
-        ttk.Label(top, text="Gambar").pack(side="left")
-        self.fig_cb = ttk.Combobox(top, textvariable=self.fig_var, state="readonly", width=34)
+        row_a = ttk.Frame(top)
+        row_a.pack(anchor="w")
+        ttk.Label(row_a, text="Gambar").pack(side="left")
+        self.fig_cb = ttk.Combobox(row_a, textvariable=self.fig_var, state="readonly", width=34)
         self.fig_cb.pack(side="left", padx=6)
         self.fig_cb.bind("<<ComboboxSelected>>", lambda e: self._draw_figure())
-        ttk.Button(top, text="Buka folder gambar", command=lambda: self.open_data("figures")).pack(side="left", padx=6)
-        b = ttk.Button(top, text="Buat kurva Pareto (semua run)", command=self.do_pareto)
+        ttk.Button(row_a, text="Buka folder gambar", command=lambda: self.open_data("figures")).pack(side="left", padx=6)
+        b = ttk.Button(row_a, text="Buat kurva Pareto (semua run)", command=self.do_pareto)
         b.pack(side="left", padx=6)
         self.buttons.append(b)
+        row_b = ttk.Frame(top)
+        row_b.pack(anchor="w", pady=(6, 0))
+        self.rep_focus = tk.StringVar(value="")
+        self.rep_constraint = tk.StringVar(value="")
+        ttk.Label(row_b, text="Laporan: fokus").pack(side="left")
+        ttk.Combobox(row_b, textvariable=self.rep_focus, values=["", "bw", "cover", "gain"], state="readonly", width=7).pack(side="left", padx=(4, 10))
+        ttk.Label(row_b, text="constraint (pisahkan dengan ;)").pack(side="left")
+        ttk.Entry(row_b, textvariable=self.rep_constraint, width=46).pack(side="left", padx=(4, 8))
+        b = ttk.Button(row_b, text="Buat laporan", command=self.do_make_report)
+        b.pack(side="left", padx=(0, 6))
+        self.buttons.append(b)
+        ttk.Button(row_b, text="Buka folder laporan", command=self.open_compare).pack(side="left")
+        ttk.Label(t, foreground="#666", text="contoh constraint: MicrostripAntena_RO4350B:gain_fr_ieee_dbi>=5.0; MicrostripAntena_RO4350B:gain_fr_ieee_dbi>=4.0   (keluaran di data/_compare)",
+                  ).grid(row=2, column=0, sticky="w")
         self.fig_label = ttk.Label(t, anchor="center")
         self.fig_label.grid(row=1, column=0, sticky="nsew", pady=8)
         self.fig_label.bind("<Configure>", lambda e: self._draw_figure())
@@ -402,6 +445,8 @@ class App:
                 w("end", f"{tag}: sampel {b['sample_id']}   {s['objective']['column']}={b['value']:.4g}   {extra}\n")
             for h in s.get("bound_hits", []):
                 w("end", f"[peringatan] {h['param']} menempel batas {h['side']} ({h['bound']:g}) pada {h['n']}/{h['of']} desain terbaik\n", ("warn",))
+        if s.get("bounds_changed"):
+            w("end", f"[opsi] Rentang parameter: override aktif ({', '.join(s['bounds_changed'])}); lihat tombol Rentang parameter... di tab 5\n", ("warn",))
         f = s.get("files", {})
         parts = []
         for key, label in [("lhs_samples", "lhs_samples"), ("bo_candidates", "kandidat BO"), ("models", "model GPR")]:
@@ -430,7 +475,7 @@ class App:
         report = path.replace(".csv", "_report.csv") if path else None
         header, rows = read_csv_rows(report if report and os.path.exists(report) else path)
         oc = self.status.get("objective", {}).get("column", "")
-        want = ["sample_id", "acq", "pof", f"pred_{oc}", f"std_{oc}", "Lp", "Wp", "LU", "WU", "WD"]
+        want = ["sample_id", "sweep_bound", "acq", "pof", f"pred_{oc}", f"std_{oc}", "Lp", "Wp", "LU", "WU", "WD"]
         cols = [c for c in want if c in header] or header[:8]
         self.cand.configure(columns=cols)
         for c in cols:
@@ -602,10 +647,83 @@ class App:
                            report=report, focus=focus, constraint=self.bo_constraint.get().strip() or None,
                            region=self.bo_region.get().strip() or None, region_auto=self.bo_region_auto.get().strip() or None,
                            margin=self.bo_margin.get().strip() or None, calibrate=self.bo_calib.get(),
-                           composite=self.bo_comp.get())
+                           composite=self.bo_comp.get(), sweep=self.bo_sweep.get().strip() or None,
+                           diversity=self.bo_div.get().strip() or None, region_adapt=self.bo_radapt.get())
+
+    def _toggle_radapt(self):
+        """Region adaptif saling eksklusif dengan region manual dan otomatis."""
+        on = self.bo_radapt.get()
+        if on:
+            self.bo_region.set("")
+            self.bo_region_auto.set("")
+        for e in (self.e_region, self.e_region_auto):
+            e.configure(state="disabled" if on else "normal")
+
+    def _check_bo_inputs(self):
+        """Periksa opsi BO sebelum menjalankan; tampilkan pesan ramah, bukan galat CLI."""
+        sweep, div = self.bo_sweep.get().strip(), self.bo_div.get().strip()
+        if sweep:
+            m = re.fullmatch(r"\s*([A-Za-z_][\w]*)\s*=\s*(-?\d+(?:\.\d+)?)\s*:\s*(-?\d+(?:\.\d+)?)\s*", sweep)
+            if not m:
+                messagebox.showwarning("Sweep", "Format sweep: KOLOM=LO:HI, mis. gain_fr_ieee_dbi=4.0:5.4")
+                return False
+            if self.bo_focus.get() in ("", "otomatis"):
+                messagebox.showwarning("Sweep", "Sweep hanya dipakai bersama Fokus (pilih fokus di Opsi lanjutan) dan KOLOM harus constraint fokus itu "
+                                       "(tambahkan lewat Constraint fokus bila perlu).")
+                return False
+            if int(self.bo_q.get()) < 2:
+                messagebox.showwarning("Sweep", "Sweep butuh jumlah kandidat minimal 2.")
+                return False
+        if div:
+            try:
+                ok = float(div) > 0
+            except ValueError:
+                ok = False
+            if not ok:
+                messagebox.showwarning("Diversity", "Diversity R harus angka lebih dari 0 (mis. 0.4).")
+                return False
+        return True
 
     def do_suggest(self):
+        if not self._check_bo_inputs():
+            return
         self.run_cmd(self._suggest_argv())
+
+    def _focus_or_none(self):
+        f = self.bo_focus.get()
+        return None if f in ("", "otomatis") else f
+
+    def do_validate(self, pof_compare=False):
+        self.run_cmd(cmd.validate(self.design(), 5, self.bo_restarts.get(), self.bo_kernel.get(), pof_compare,
+                                  self._focus_or_none(), self.bo_constraint.get().strip() or None),
+                     after=lambda: self.show_figure("forward_validation.png"))
+
+    def do_validate_pof(self):
+        self.do_validate(pof_compare=True)
+
+    def do_sensitivity(self):
+        self.run_cmd(cmd.sensitivity(self.design(), self.bo_region_auto.get().strip() or None, self.bo_restarts.get(), self.bo_kernel.get()),
+                     after=lambda: self.show_figure("sensitivity.png"))
+
+    def do_make_report(self):
+        cons = [c.strip() for c in self.rep_constraint.get().split(";") if c.strip()]
+        self.run_cmd(cmd.report(None, self.rep_focus.get() or None, cons),
+                     after=lambda: self.show_path(os.path.join(paths.DATA_DIR, "_compare", "pareto.png")))
+
+    def open_bounds(self):
+        from cstopt.gui.bounds_dialog import BoundsDialog
+        dlg = getattr(self, "_bounds_dlg", None)
+        if dlg is not None and dlg.top.winfo_exists():
+            dlg.top.lift()
+            return
+        self._bounds_dlg = BoundsDialog(self)
+
+    def open_compare(self):
+        d = os.path.join(paths.DATA_DIR, "_compare")
+        if not os.path.isdir(d):
+            messagebox.showinfo("Belum ada", f"Folder belum ada (jalankan Buat laporan dulu):\n{d}")
+            return
+        open_path(d)
 
     def do_report(self):
         self.run_cmd(self._suggest_argv(report=True), after=lambda: self.show_figure("bo_convergence.png"))

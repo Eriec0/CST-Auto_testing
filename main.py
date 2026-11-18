@@ -18,6 +18,7 @@ Perintah:
   validate   validasi maju GPR: bias, kalibrasi PoF, akurasi di wilayah kerja, saran margin
   sensitivity sensitivitas model: relevansi ARD dan indeks Sobol (S1, ST)
   report     susun laporan otomatis (report.md dan gambar) dari data yang ada
+  bounds     rentang parameter per run: lihat, usulkan pelebaran, atur manual, reset (bounds_override.json)
 
 Setiap perintah punya opsi sendiri:  py main.py suggest -h
 """
@@ -44,6 +45,7 @@ COMMANDS = {
     "validate": "cstopt.ml.validate",
     "sensitivity": "cstopt.ml.sensitivity",
     "report": "cstopt.report.report",
+    "bounds": "cstopt.ml.bounds",
 }
 CST_ONLY = {"run", "export"}
 CST_MODULES = {"cst", "win32api", "win32gui", "win32con", "pythoncom", "pywinauto", "comtypes"}

@@ -2,11 +2,11 @@
 
 ## 1. Informasi reproduksi
 
-- Tanggal: 2026-11-16
-- Commit git: e7e54d45a75f67fe99c08d1113d7320bdc33b48e
+- Tanggal: 2026-11-18
+- Commit git: 395408cd80831de7babbfa5b706d26ebcc468e7d
 - Paket: Python 3.10.0, numpy 2.2.6, pandas 2.3.3, sklearn 1.7.2, scipy 1.15.3, matplotlib 3.10.9
 - Sampel per run: MicrostripAntena 156 sampel; MicrostripAntena_RO4350B 185 sampel
-- Syarat dasar: fr 3.3 sampai 3.7 GHz dan RL minimum <= -10 dB; desain terbaik dipilih dengan memaksimalkan bw_mhz
+- Syarat dasar: fr 3.3 sampai 3.7 GHz dan RL minimum <= -10 dB; desain terbaik dipilih dengan memaksimalkan band_cover_pct
 
 ## 2. Definisi
 
@@ -20,39 +20,22 @@
 
 ### MicrostripAntena: skenario syarat dasar
 
-Desain terbaik: sampel 137 (52 sampel memenuhi syarat skenario ini).
+Desain terbaik: sampel 120 (52 sampel memenuhi syarat skenario ini).
 
 | besaran | target proposal | tercapai | selisih terhadap target | status |
 |---|---|---|---|---|
-| fr (GHz) | 3.3 sampai 3.7 | 3.698 | 2 MHz dari tepi pita terdekat | tercapai |
-| RL minimum (dB) | <= -10 | -18.2 | -8.2 dB | tercapai |
-| BW (MHz) | >= 200 | 180.6 | -19.4 MHz (90% dari target) | tidak tercapai |
-| BW pecahan (%) | tidak ada | 4.88 |  | acuan |
-| Cakupan pita (%) | tidak ada | 22.7 |  | acuan |
-| Gain IEEE (dBi) | >= 5 | 2.80 | -2.20 dB | tidak tercapai |
-| Efisiensi radiasi di fr (%) | tidak ada | 49.4 |  | acuan |
-| Directivity di fr (dBi) | tidak ada | 5.87 |  | acuan |
+| fr (GHz) | 3.3 sampai 3.7 | 3.602 | 98 MHz dari tepi pita terdekat | tercapai |
+| RL minimum (dB) | <= -10 | -20.6 | -10.6 dB | tercapai |
+| BW (MHz) | >= 200 | 155.7 | -44.3 MHz (78% dari target) | tidak tercapai |
+| BW pecahan (%) | tidak ada | 4.32 |  | acuan |
+| Cakupan pita (%) | tidak ada | 38.9 |  | acuan |
+| Gain IEEE (dBi) | >= 5 | 2.74 | -2.26 dB | tidak tercapai |
+| Efisiensi radiasi di fr (%) | tidak ada | 46.8 |  | acuan |
+| Directivity di fr (dBi) | tidak ada | 5.91 |  | acuan |
 
 Maksimum terpisah pada skenario ini: BW 180.6 MHz (sampel 137, gain 2.80 dBi); gain 2.89 dBi (sampel 95, BW 126.2 MHz).
 
-### MicrostripAntena_RO4350B: skenario gain_fr_ieee_dbi >= 5
-
-Desain terbaik: sampel 165 (129 sampel memenuhi syarat skenario ini).
-
-| besaran | target proposal | tercapai | selisih terhadap target | status |
-|---|---|---|---|---|
-| fr (GHz) | 3.3 sampai 3.7 | 3.616 | 84 MHz dari tepi pita terdekat | tercapai |
-| RL minimum (dB) | <= -10 | -24.9 | -14.9 dB | tercapai |
-| BW (MHz) | >= 200 | 158.6 | -41.4 MHz (79% dari target) | tidak tercapai |
-| BW pecahan (%) | tidak ada | 4.39 |  | acuan |
-| Cakupan pita (%) | tidak ada | 39.4 |  | acuan |
-| Gain IEEE (dBi) | >= 5 | 5.03 | +0.03 dB | tercapai |
-| Efisiensi radiasi di fr (%) | tidak ada | 82.3 |  | acuan |
-| Directivity di fr (dBi) | tidak ada | 5.67 |  | acuan |
-
-Maksimum terpisah pada skenario ini: BW 158.6 MHz (sampel 165, gain 5.03 dBi); gain 5.82 dBi (sampel 102, BW 115.8 MHz).
-
-### MicrostripAntena_RO4350B: skenario gain_fr_ieee_dbi >= 4
+### MicrostripAntena_RO4350B: skenario syarat dasar
 
 Desain terbaik: sampel 179 (177 sampel memenuhi syarat skenario ini).
 
@@ -71,38 +54,38 @@ Maksimum terpisah pada skenario ini: BW 247.5 MHz (sampel 179, gain 4.43 dBi); g
 
 ## 4. Parameter desain terbaik
 
-### MicrostripAntena: sampel 137 (skenario syarat dasar)
+### MicrostripAntena: sampel 120 (skenario syarat dasar)
 
 | parameter | nilai (mm) |
 |---|---|
-| Lp | 17.611 |
-| Wp | 23.652 |
-| LU | 4.773 |
-| WU | 5.480 |
-| gU | 0.942 |
-| PU | 1.630 |
-| LI | 5.900 |
-| LD | 3.754 |
-| WD | 8.000 |
-| gD | 0.545 |
-| PD | 0.000 |
+| Lp | 18.329 |
+| Wp | 24.419 |
+| LU | 5.000 |
+| WU | 6.000 |
+| gU | 0.805 |
+| PU | 2.165 |
+| LI | 5.798 |
+| LD | 3.717 |
+| WD | 6.000 |
+| gD | 0.588 |
+| PD | -1.134 |
 | substrat | FR-4 (lossy): epsilon 4.3, tan delta 0.025, h 1.6 mm |
 
-### MicrostripAntena_RO4350B: sampel 165 (skenario gain_fr_ieee_dbi >= 5)
+### MicrostripAntena_RO4350B: sampel 179 (skenario syarat dasar)
 
 | parameter | nilai (mm) |
 |---|---|
-| Lp | 17.820 |
-| Wp | 30.988 |
-| LU | 2.394 |
-| WU | 3.956 |
-| gU | 0.974 |
-| PU | 3.721 |
-| LI | 6.736 |
-| LD | 4.360 |
-| WD | 13.364 |
-| gD | 1.062 |
-| PD | 0.158 |
+| Lp | 17.854 |
+| Wp | 30.795 |
+| LU | 2.636 |
+| WU | 5.893 |
+| gU | 1.149 |
+| PU | 3.551 |
+| LI | 6.157 |
+| LD | 6.523 |
+| WD | 18.000 |
+| gD | 1.009 |
+| PD | 1.117 |
 | substrat | Rogers RO4350B (lossy): epsilon 3.66, tan delta 0.0037, h 1.524 mm |
 
 ## 5. Kurva Pareto

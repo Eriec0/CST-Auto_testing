@@ -35,8 +35,10 @@ from cstopt.loader import load_design_module
 
 # ---------------------------------------------------------------- pemetaan ke parameter (spec = file desain)
 def to_params(unit_row, spec):
-    lo = np.array([spec.BOUNDS[k][0] for k in spec.PARAM_NAMES])
-    hi = np.array([spec.BOUNDS[k][1] for k in spec.PARAM_NAMES])
+    from cstopt import boundsio
+    b = boundsio.effective_bounds(spec)[0]                  # BOUNDS file desain, atau override per run bila ada
+    lo = np.array([b[k][0] for k in spec.PARAM_NAMES])
+    hi = np.array([b[k][1] for k in spec.PARAM_NAMES])
     vals = np.round(lo + unit_row * (hi - lo), spec.DECIMALS)
     return dict(zip(spec.PARAM_NAMES, map(float, vals)))
 

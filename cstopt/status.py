@@ -58,6 +58,7 @@ def summary(design=None):
     s["foci"] = list(d.foci)
     oc = d.objective["column"]
     s["objective"] = {"column": oc, "goal": d.objective["goal"]}
+    s["bounds_changed"] = list(getattr(d, "bounds_changed", []))     # parameter dengan override rentang (bounds_override.json)
     ok = mc.feasible_mask(d, df)
     s["n_feasible"] = int(ok.sum())
     pool = df[ok] if ok.any() else df
@@ -86,6 +87,8 @@ def format_summary(s):
         st = s["stage"]
         L.append(f"Tahap BO : {st['index']}/{st['total']} ({st['name']}), objective {s['objective']['goal']} {s['objective']['column']}")
         L.append(f"Feasible : {s['n_feasible']}/{s['n_samples']} sampel memenuhi constraint tahap ini")
+        if s.get("bounds_changed"):
+            L.append(f"Rentang  : override aktif ({', '.join(s['bounds_changed'])}); lihat: py main.py bounds")
         if "best" in s:
             b = s["best"]
             tag = "terbaik feasible" if b["feasible"] else "terbaik (belum ada yang feasible)"

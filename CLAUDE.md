@@ -9,7 +9,7 @@ Rincian hasil ada di `docs/` (progres_fr4.md, pilot_h.md, kontrol_tand.md, subst
 - Jangan membaca isi `data/` (curves/, eff/, ff/ berisi ratusan berkas). Hampir semua tugas tidak butuh itu. Bila perlu angka, minta pengguna
   mengunggah `batch_lhs.csv`, baca dengan pandas (`usecols`), dan tampilkan ringkasan (head, describe), bukan seluruh isi.
 - Daftar kode: `git ls-files | grep -v "^data/"`. Baca bagian yang perlu saja (`grep -n`, `sed -n 'a,bp'`). Ukuran kira kira: `ml/core.py` 500 baris,
-  `cst/batch.py` 450, `cst/export.py` 350, `gui/app.py` 450. Jangan memuat seluruh file untuk perubahan kecil.
+  `cst/batch.py` 450, `cst/export.py` 350, `gui/app.py` 760. Jangan memuat seluruh file untuk perubahan kecil.
 - Batasi keluaran tool (`| head -20`, `| tail`, `grep`). Jangan mencetak CSV atau log penuh. Ringkas hasilnya sendiri.
 - Gunakan angka di bagian 5; jangan mengulang analisis yang sudah ada. Status proyek: `py main.py status`, bukan memuat data.
 - Ubah file dengan patch string-replace, dan serahkan zip berisi HANYA file yang berubah (bukan seluruh repo).
@@ -90,6 +90,8 @@ Status (16 Nov 2026): BO RO4350B dibekukan pada 185 sampel; mesh dan toleransi d
 P2 sesi 1: P2-1 `--sweep` dan P2-2 `--diversity` selesai di sandbox (paketM); adopsi menunggu keputusan pengguna dan uji akhir (`PROGRESS.md` bagian 0).
 P2-4 `--region-adapt` selesai di sandbox (paketO): aman, manfaat tidak terbukti (replay kurang berdaya, fallback 87 sampai 92%); jangan diklaim sebagai perbaikan.
 P2-3 Tahap A selesai: PoF klasifikasi dan dua bagian BW TIDAK membantu (validasi maju FR-4 dan RO4350B; `validate --pof-compare`); tidak diadopsi, `suggest` tidak berubah.
+G2a selesai di sandbox (paketS): `py main.py bounds` (lihat/usulkan/atur/reset rentang parameter lewat `data/<RUN>/bounds_override.json`; file desain tidak pernah diedit; tanpa override hasil IDENTIK; uji `tools/test_bounds.py`); G2b selesai (paketT): tombol "Rentang parameter..." di tab 5 membuka dialog yang membungkus `bounds --json` (uji `tools/test_gui_g2b.py`, xvfb di Linux).
+GUI G1 selesai di sandbox (paketR): tab 5 memuat sweep, diversity, region adaptif, tombol Validasi/Sensitivitas; tab 6 memuat Buat laporan; uji `tools/test_gui_g1.py` (xvfb di Linux). G2 sampai G5 (rentang parameter, tampilan data, tampilan, dialog substrat) menunggu keputusan pembekuan; rencana di `docs/RENCANA_LANJUTAN.md`.
 Berikutnya (lebar dulu): (a) P1-1 selesai (kode, tiga tahap); (b) pengguna: `sensitivity` RO4350B, `backtest` FR-4, `report`, `package_dataset`, commit, lalu tag rilis. P1-4 dan P0-3 (draf) selesai.
 Rincian di `PROGRESS.md`; per 16 November: 8 hari ke pembekuan fitur (24 November), laporan final 28 November, tenggat 1 Desember.
 Cabang git: restruktur sudah di-merge; pilot-h dan control-tand dibuat bertumpuk; paket BO v2 di cabang bo-v2. Cek `git branch -a` dan `git log --oneline -8`.

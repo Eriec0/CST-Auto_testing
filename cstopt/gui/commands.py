@@ -55,7 +55,8 @@ def train(kernel="rbf", restarts=5, cv=5, seed=0, design=None):
 
 
 def suggest(q=5, kernel="rbf", restarts=5, stage=None, design=None, report=False, focus=None, constraint=None,
-            region=None, region_auto=None, margin=None, calibrate=False, composite=False):
+            region=None, region_auto=None, margin=None, calibrate=False, composite=False,
+            sweep=None, diversity=None, region_adapt=False):
     a = ["suggest"]
     if report:
         a.append("--report")
@@ -71,6 +72,13 @@ def suggest(q=5, kernel="rbf", restarts=5, stage=None, design=None, report=False
         a += ["--region", region]
     elif region_auto:
         a += ["--region-auto", region_auto]
+    elif region_adapt:                         # saling eksklusif dengan region manual dan otomatis
+        a.append("--region-adapt")
+    if not report:
+        if sweep:                              # KOLOM=LO:HI; butuh --focus (diperiksa GUI sebelum menjalankan)
+            a += ["--sweep", sweep]
+        if diversity:
+            a += ["--diversity", str(diversity)]
     if margin:
         a += ["--margin", margin]
     if calibrate:
@@ -83,6 +91,55 @@ def suggest(q=5, kernel="rbf", restarts=5, stage=None, design=None, report=False
 def backtest(reps=20, steps=30, restarts=2, design=None):
     return _design(["backtest", "--reps", str(int(reps)), "--steps", str(int(steps)),
                     "--restarts", str(int(restarts))], design)
+
+
+def validate(design=None, batch=5, restarts=2, kernel="rbf", pof_compare=False, focus=None, constraint=None):
+    a = ["validate", "--batch", str(int(batch)), "--kernel", kernel, "--restarts", str(int(restarts))]
+    if pof_compare:
+        a.append("--pof-compare")
+    if focus:
+        a += ["--focus", focus]
+        if constraint:
+            a += ["--constraint", constraint]
+    return _design(a, design)
+
+
+def sensitivity(design=None, region_auto=None, restarts=2, kernel="rbf"):
+    a = ["sensitivity", "--kernel", kernel, "--restarts", str(int(restarts))]
+    if region_auto:
+        a += ["--region-auto", region_auto]
+    return _design(a, design)
+
+
+def report(runs=None, focus=None, constraints=None):
+    """Laporan otomatis (data/_compare). constraints: daftar teks '[RUN:]kolom>=nilai'."""
+    a = ["report"]
+    if runs:
+        a += ["--runs", *runs]
+    if focus:
+        a += ["--focus", focus]
+    for c in constraints or []:
+        a += ["--constraint", c]
+    return a
+
+
+def bounds(design=None, propose=False, apply=False, set_=None, reset=False, widen=None, dry_run=False):
+    """Perintah `bounds` (selalu dengan --json; baris terakhir keluaran = JSON)."""
+    a = ["bounds"]
+    if reset:
+        a.append("--reset")
+    elif set_:
+        a += ["--set", set_]
+    elif apply:
+        a.append("--apply")
+    elif propose:
+        a.append("--propose")
+    if widen is not None and (propose or apply):
+        a += ["--widen", str(widen)]
+    if dry_run:
+        a.append("--dry-run")
+    a.append("--json")
+    return _design(a, design)
 
 
 def pareto(runs=None, all_points=False):

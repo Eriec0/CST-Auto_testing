@@ -52,8 +52,10 @@ class Design:
         self.mod = mod
         self.name = mod.NAME
         self.params = list(mod.PARAM_NAMES)
-        self.lo = np.array([mod.BOUNDS[k][0] for k in self.params], float)
-        self.hi = np.array([mod.BOUNDS[k][1] for k in self.params], float)
+        from cstopt import boundsio
+        b_eff, self.bounds_changed = boundsio.effective_bounds(mod)   # override per run (bounds_override.json), bila ada
+        self.lo = np.array([b_eff[k][0] for k in self.params], float)
+        self.hi = np.array([b_eff[k][1] for k in self.params], float)
         self.decimals = getattr(mod, "DECIMALS", 3)
         self.id_col = getattr(mod, "ID_COLUMN", "sample_id")
         self.dataset = mod.DATASET_CSV

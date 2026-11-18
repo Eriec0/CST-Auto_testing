@@ -323,3 +323,38 @@ Contoh analisis hasil:
 - Kolom `hs`, `Wf`, `lossTan` di CSV sampel otomatis menjadi parameter ekstra (jangan sampai diabaikan; tanpa itu baris dianggap duplikat).
 - Sandbox: `/bin/sh` tanpa brace expansion; salin folder data dengan `cp -r a/. b/` (bukan `cp -r a b` bila `b` sudah ada); GUI hanya bisa diuji lewat `xvfb-run`.
 - Wf 50 ohm: FR-4 h 1,6: 3,112 mm (macro 3,11); RO4350B h 1,524 dengan epsilon 3,66: sekitar 3,336 mm.
+
+
+## Lanjutan: GUI, rentang parameter, tampilan data, dan ide (disepakati 18 November 2026)
+
+Konteks: P0, P1, dan P2-1 sampai P2-4 selesai (P2-3 hasil negatif; P2-5 dan P2-6 dilewati). Permintaan pengguna: memperbaiki tampilan GUI,
+menyambungkan semua fitur ke GUI, mengubah rentang parameter (BOUNDS) secara manual atau otomatis dari GUI, mengatur h, memperkaya tampilan data,
+laporan, dan grafik, serta mengoptimalkan metode ML. Tiap tahap = satu zip berisi file berubah saja; opsi baru mati secara bawaan; regresi
+`suggest` seed 0 harus tetap IDENTIK; uji GUI di sandbox lewat xvfb dan tangkap layar (tampilan di Windows dan CST nyata diuji pengguna).
+
+Status pembekuan fitur 24 November untuk pekerjaan GUI: BELUM diputuskan pengguna. G1 dimulai 18 November karena risikonya paling rendah
+(tidak menyentuh inti `suggest`); G2 sampai G5 menunggu keputusan itu.
+
+| Tahap | Isi | Risiko | Butuh CST | File utama |
+|---|---|---|---|---|
+| G1 | Sambungkan ke GUI: `--sweep`, `--diversity`, `--region-adapt` (saling eksklusif dengan region manual dan otomatis), serta tombol `validate`, `sensitivity`, `report` | rendah | tidak | `gui/app.py`, `gui/commands.py` |
+| G2 | Panel rentang parameter: tabel min/max yang bisa diedit; tombol "usulkan pelebaran" dari peringatan parameter menempel batas; validasi geometri sebelum disimpan; disimpan sebagai file override per run (bukan mengedit `designs/*.py`); tanpa override hasil IDENTIK | sedang | tidak (tetapi geometri hasil pelebaran harus bisa disimulasikan di CST: keputusan pengguna) | `ml/core.py` (`load_design`), `gui/app.py` |
+| G3 | Tampilan data: tabel sampel yang bisa diurutkan dan disaring, sorotan feasible, klik baris untuk melihat kurva S11; tab grafik (Pareto dengan kandidat sweep, parameter vs objective, koordinat paralel); ekspor PNG; perbaikan `report` | rendah | tidak | `gui/app.py`, `report/` (perlu contoh bagian laporan yang dianggap kurang) |
+| G4 | Perbaikan tampilan: tema, tata letak, bilah status, skala font untuk layar laptop (tangkap layar dari sandbox untuk dinilai pengguna) | rendah | tidak | `gui/app.py` |
+| G5a | Dialog substrat (er, tan delta, h; Wf dihitung otomatis lewat `tools/wf50.py`) yang membungkus `tools/new_design.py` | rendah | tidak | `gui/app.py` |
+
+Status 18 November 2026: G1 selesai (paketR); G2a (backend dan CLI `bounds`) selesai (paketS); G2b (dialog GUI) selesai (paketT); G3 sampai G5 menunggu keputusan pengguna.
+
+Catatan penting G2: mengubah BOUNDS mengubah normalisasi ruang satuan, sehingga jarak `--spread`, `--diversity`, dan `min_dist` ikut berubah makna.
+Sampel lama tetap valid dan model dilatih ulang tiap putaran, tetapi hasil tidak identik dengan sebelum pelebaran. Pelebaran otomatis hanya MENGUSULKAN;
+penerapannya selalu lewat konfirmasi pengguna. Motivasi: log pengguna 18 November menunjukkan kandidat menempel batas (FR-4: WU bawah, WD atas;
+RO4350B: LU bawah, WD atas) dan RO4350B belum konvergen (EI maks 12,7% dari terbaik, ambang 1%).
+
+### Catatan untuk nanti (BELUM dijadwalkan; dicoba hanya bila pengguna memutuskan)
+- **G5b: h sebagai variabel BO** (= P2-5). `hs` masuk `PARAM_NAMES` dengan `DISCRETE` (nilai laminat vendor) dan `Wf` sebagai kolom turunan (`DERIVED`, lewat `wf50`),
+  dataset lama di-backfill. Butuh sekitar 30 simulasi CST; perkiraan untung paling banyak +10 sampai 15 MHz di FR-4; RO4350B tidak punya ruang naik
+  (1,524 mm sudah laminat standar paling tebal; cek datasheet vendor). Nilai utamanya demonstrasi parameter diskret dan turunan. Detail ada di bagian P2-5 di atas.
+- **Optimasi ML** (jalur terpisah, tiap ide wajib lolos gerbang validasi maju yang sama dengan P2-3: Brier dan RMSE di wilayah kerja, baik FR-4 maupun RO4350B):
+  kernel Matern vs RBF lewat `validate --kernel`, level noise, transformasi input, prior tren. Data hanya 156 dan 185 sampel dan PoF terlalu yakin
+  (kemiringan kalibrasi 0,25 sampai 0,36), jadi jangan menjanjikan perbaikan besar; G2 (rentang) kemungkinan lebih berpengaruh daripada perubahan model.
+
