@@ -22,6 +22,7 @@ from tkinter import filedialog, messagebox, ttk
 from cstopt import paths
 from cstopt.gui import commands as cmd
 from cstopt.gui.dataview import DataTab
+from cstopt.gui.layout import autowrap, fit_window, make_flow, make_scrollable
 from cstopt.gui.runner import Runner
 
 try:
@@ -65,8 +66,7 @@ class App:
     def __init__(self, root, design=None):
         self.root = root
         root.title("Optimasi antena: CST + GPR + Bayesian Optimization")
-        root.geometry("1120x820")
-        root.minsize(920, 660)
+        fit_window(root, 1120, 820, 860, 520)             # G4a: ukuran awal dibatasi layar
         self.runner = Runner(MAIN_PY, paths.ROOT)
         self.status = {}
         self.buttons = []                            # tombol aksi yang dinonaktifkan selama proses berjalan
@@ -79,15 +79,23 @@ class App:
         self._photo = None
         self._zoom_path = None
         self._user_stopped = False
+        self.status_detail = False                   # G4a: status ringkas (2 baris) atau detail
+        self._status_full, self._status_compact = [], []
+        self._log_open = False
+        self._log_lines = 8                          # tinggi panel log saat terbuka (baris), bisa digeser
+        self._log_auto = False                       # log dibuka otomatis oleh perintah (boleh dilipat lagi sendiri)
+        self._collapse_job = None
         self._build_top()
+        self._build_log()                            # dipasang di bawah lebih dulu agar tidak pernah terpotong
         self._build_tabs()
-        self._build_log()
         root.protocol("WM_DELETE_WINDOW", self._on_close)
         self.refresh_status()
 
     # ------------------------------------------------------------------ tata letak
     def _build_top(self):
-        f = ttk.Frame(self.root, padding=(10, 8, 10, 0))
+        outer = ttk.Frame(self.root, padding=(10, 8, 10, 0))      # padding di bingkai luar: tinggi baris membungkus tidak ikut terpotong
+        outer.pack(fill="x")
+        f = ttk.Frame(outer)
         f.pack(fill="x")
         ttk.Label(f, text="Desain:").pack(side="left")
         cb = ttk.Combobox(f, textvariable=self.design_var, values=self.designs, state="readonly", width=28)
@@ -95,8 +103,11 @@ class App:
         cb.bind("<<ComboboxSelected>>", lambda e: self.refresh_status())
         ttk.Button(f, text="Muat ulang status", command=self.refresh_status).pack(side="left")
         ttk.Button(f, text="Buka folder data", command=self.open_data).pack(side="left", padx=6)
-        self.status_text = tk.Text(self.root, height=8, wrap="none", font="TkFixedFont", state="disabled",
-                                   background="#f6f6f6", relief="flat", padx=8, pady=6)
+        self.detail_btn = ttk.Button(f, text="Detail", width=8, command=self.toggle_status_detail)
+        self.detail_btn.pack(side="left")
+        make_flow(f)
+        self.status_text = tk.Text(self.root, height=2, wrap="none", font="TkDefaultFont", state="disabled",
+                                   background="#f6f6f6", relief="flat", padx=8, pady=4)
         self.status_text.pack(fill="x", padx=10, pady=(6, 4))
         self.status_text.tag_configure("warn", foreground="#b45f06")
         self.status_text.tag_configure("err", foreground="#b00020")
@@ -108,7 +119,7 @@ class App:
         self.tab_cst = self._tab("2  Simulasi CST")
         self.tab_qc = self._tab("3  Data dan QC")
         self.tab_gpr = self._tab("4  Model GPR")
-        self.tab_bo = self._tab("5  Optimasi BO")
+        self.tab_bo = self._tab("5  Optimasi BO", scroll=True)       # isinya tinggi: bisa digulir di layar kecil
         self.tab_res = self._tab("6  Hasil")
         self.tab_data = self._tab("7  Data")
         self._fill_lhs()
@@ -119,35 +130,85 @@ class App:
         self._fill_results()
         self.data_tab = DataTab(self.tab_data, self)
 
-    def _tab(self, title):
+    def _tab(self, title, scroll=False):
+        if scroll:
+            outer, f = make_scrollable(self.nb, padding=12)
+            self.nb.add(outer, text=title)
+            return f
         f = ttk.Frame(self.nb, padding=12)
         self.nb.add(f, text=title)
         return f
 
     def _build_log(self):
-        f = ttk.Frame(self.root, padding=(10, 0, 10, 8))
-        f.pack(fill="both", expand=False)
+        """Panel log di bawah: terlipat jadi satu baris (baris terakhir) saat tidak ada proses; terbuka saat perintah jalan."""
+        f = ttk.Frame(self.root, padding=(10, 0, 10, 6))
+        f.pack(side="bottom", fill="x")
+        self.log_frame = f
         bar = ttk.Frame(f)
         bar.pack(fill="x")
+        self.log_btn = ttk.Button(bar, text="Buka log", width=10, command=self.toggle_log)
+        self.log_btn.pack(side="left")
         self.state_var = tk.StringVar(value="Siap")
-        ttk.Label(bar, textvariable=self.state_var).pack(side="left")
-        self.progress = ttk.Progressbar(bar, mode="indeterminate", length=120)
+        ttk.Label(bar, textvariable=self.state_var, width=16).pack(side="left", padx=(8, 0))
+        self.progress = ttk.Progressbar(bar, mode="indeterminate", length=90)
         self.progress.pack(side="left", padx=8)
         self.stop_btn = ttk.Button(bar, text="Hentikan", command=self.stop, state="disabled")
         self.stop_btn.pack(side="right")
         ttk.Button(bar, text="Bersihkan log", command=self.clear_log).pack(side="right", padx=6)
-        box = ttk.Frame(f)
-        box.pack(fill="both", expand=True, pady=(4, 0))
-        self.log = tk.Text(box, height=11, wrap="none", font="TkFixedFont", state="disabled",
+        self.last_var = tk.StringVar(value="")
+        self.last_lbl = ttk.Label(bar, textvariable=self.last_var, width=12, foreground="#555")
+        self.last_lbl.pack(side="left", fill="x", expand=True)       # width kecil: teks panjang terpotong, tidak melebarkan jendela
+        self.grip = tk.Frame(f, height=7, cursor="sb_v_double_arrow", background="#c9ced3")
+        self.grip.bind("<ButtonPress-1>", self._grip_start)
+        self.grip.bind("<B1-Motion>", self._grip_drag)
+        self.box = ttk.Frame(f)
+        self.log = tk.Text(self.box, height=self._log_lines, wrap="none", font="TkFixedFont", state="disabled",
                            background="#101418", foreground="#d7dde3", insertbackground="#d7dde3", padx=8, pady=6)
-        sb = ttk.Scrollbar(box, command=self.log.yview)
+        sb = ttk.Scrollbar(self.box, command=self.log.yview)
         self.log.configure(yscrollcommand=sb.set)
         sb.pack(side="right", fill="y")
         self.log.pack(side="left", fill="both", expand=True)
+        self.log.bind("<Enter>", lambda e: self._cancel_collapse())  # pengguna sedang membaca: jangan dilipat otomatis
         self.log.tag_configure("cmd", foreground="#7fd1ff")
         self.log.tag_configure("warn", foreground="#ffc66d")
         self.log.tag_configure("ok", foreground="#8fdc8f")
         self.log.tag_configure("bad", foreground="#ff8f8f")
+
+    def _set_log_open(self, on, auto=False):
+        self._cancel_collapse()
+        if on == self._log_open:
+            if on and not auto:
+                self._log_auto = False
+            return
+        self._log_open = on
+        self._log_auto = bool(on and auto)
+        if on:
+            self.grip.pack(fill="x", pady=(4, 0))
+            self.box.pack(fill="both", expand=True)
+            self.log.see("end")
+        else:
+            self.box.pack_forget()
+            self.grip.pack_forget()
+        self.log_btn.configure(text="Tutup log" if on else "Buka log")
+
+    def toggle_log(self):
+        self._set_log_open(not self._log_open, auto=False)
+
+    def _cancel_collapse(self):
+        if self._collapse_job is not None:
+            self.root.after_cancel(self._collapse_job)
+            self._collapse_job = None
+
+    def _grip_start(self, e):
+        self._grip_y = e.y_root
+        self._grip_lines0 = self._log_lines
+
+    def _grip_drag(self, e):
+        from tkinter import font as tkfont
+        lh = max(8, tkfont.nametofont("TkFixedFont").metrics("linespace"))
+        n = self._grip_lines0 + int(round((self._grip_y - e.y_root) / lh))      # seret ke atas = log lebih tinggi
+        self._log_lines = max(3, min(30, n))
+        self.log.configure(height=self._log_lines)
 
     # ------------------------------------------------------------------ isi tab
     def _row(self, parent, r, label, widget_factory):
@@ -164,8 +225,8 @@ class App:
 
     def _fill_lhs(self):
         t = self.tab_lhs
-        ttk.Label(t, text="Bangkitkan sampel awal Latin Hypercube (maximin) dari rentang parameter di file desain.",
-                  wraplength=900).grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 8))
+        autowrap(ttk.Label(t, text="Bangkitkan sampel awal Latin Hypercube (maximin) dari rentang parameter di file desain.",
+                           wraplength=900)).grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 8))
         self.lhs_n = tk.IntVar(value=80)
         self.lhs_seed = tk.IntVar(value=42)
         self.lhs_report = tk.BooleanVar(value=False)
@@ -181,14 +242,14 @@ class App:
         t = self.tab_cst
         t.columnconfigure(1, weight=1)
         if not CST_OK:
-            ttk.Label(t, foreground="#b45f06", wraplength=900,
-                      text="CST atau paket Windows tidak terdeteksi di perangkat ini, jadi tab ini nonaktif. "
-                           "Bagian ML (tab lain) tetap bisa dipakai. Untuk mengaktifkan: pip install -r "
-                           "requirements-cst.txt (hanya Windows dengan CST Studio Suite).").grid(row=0, column=0, columnspan=3, sticky="w")
+            autowrap(ttk.Label(t, foreground="#b45f06", wraplength=900,
+                               text="CST atau paket Windows tidak terdeteksi di perangkat ini, jadi tab ini nonaktif. "
+                                    "Bagian ML (tab lain) tetap bisa dipakai. Untuk mengaktifkan: pip install -r "
+                                    "requirements-cst.txt (hanya Windows dengan CST Studio Suite).")).grid(row=0, column=0, columnspan=3, sticky="w")
         else:
-            ttk.Label(t, text="Buka project di CST lebih dulu (file .cst yang sudah dibangun dengan macro). "
-                              "Hasil ditambahkan ke data/<RUN>/batch_lhs.csv; sampel yang sudah ada dilewati.",
-                      wraplength=900).grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 8))
+            autowrap(ttk.Label(t, text="Buka project di CST lebih dulu (file .cst yang sudah dibangun dengan macro). "
+                                       "Hasil ditambahkan ke data/<RUN>/batch_lhs.csv; sampel yang sudah ada dilewati.",
+                               wraplength=900)).grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 8))
         self.cst_samples = tk.StringVar(value="")
         self.cst_project = tk.StringVar(value="")
         self.cst_auto = tk.BooleanVar(value=True)
@@ -217,7 +278,7 @@ class App:
 
     def _fill_qc(self):
         t = self.tab_qc
-        ttk.Label(t, text="Pemeriksaan kualitas data hasil simulasi (tanpa CST).", wraplength=900).grid(row=0, column=0, sticky="w", pady=(0, 8))
+        autowrap(ttk.Label(t, text="Pemeriksaan kualitas data hasil simulasi (tanpa CST).", wraplength=900)).grid(row=0, column=0, sticky="w", pady=(0, 8))
         bar = ttk.Frame(t)
         bar.grid(row=1, column=0, sticky="w")
         for text, fn in [("QC dataset", self.do_qc), ("Verifikasi kurva S11", self.do_curves)]:
@@ -232,7 +293,7 @@ class App:
         t.columnconfigure(0, weight=1)
         t.rowconfigure(2, weight=1)
         top = ttk.Frame(t)
-        top.grid(row=0, column=0, sticky="w")
+        top.grid(row=0, column=0, sticky="ew")
         self.gpr_kernel = tk.StringVar(value="rbf")
         self.gpr_restarts = tk.IntVar(value=5)
         self.gpr_cv = tk.IntVar(value=5)
@@ -246,6 +307,7 @@ class App:
         b.pack(side="left", padx=(8, 8))
         self.buttons.append(b)
         ttk.Button(top, text="Lihat parity", command=lambda: self.show_figure("gpr_parity.png")).pack(side="left")
+        make_flow(top)
         ttk.Label(t, text="Akurasi tiap target. Merah = R2 cross-validation di bawah 0,85 (indikator di proposal).",
                   foreground="#666").grid(row=1, column=0, sticky="w", pady=6)
         cols = ["target", "R2_test", "R2_cv", "RMSE_cv", "cov95"]
@@ -268,7 +330,7 @@ class App:
         t.columnconfigure(0, weight=1)
         t.rowconfigure(4, weight=1)
         top = ttk.Frame(t)
-        top.grid(row=0, column=0, sticky="w")
+        top.grid(row=0, column=0, sticky="ew")
         self.bo_q = tk.IntVar(value=5)
         self.bo_kernel = tk.StringVar(value="rbf")
         self.bo_restarts = tk.IntVar(value=5)
@@ -291,6 +353,7 @@ class App:
         ttk.Spinbox(top, from_=1, to=20, textvariable=self.bo_restarts, width=4).pack(side="left", padx=(4, 12))
         ttk.Label(top, text="Tahap").pack(side="left")
         ttk.Combobox(top, textvariable=self.bo_stage, values=["otomatis", "1", "2"], state="readonly", width=9).pack(side="left", padx=(4, 12))
+        make_flow(top)
         adv = ttk.LabelFrame(t, text="Opsi lanjutan (kosong = perilaku bawaan)", padding=6)
         adv.grid(row=1, column=0, sticky="ew", pady=(8, 0))
         adv.columnconfigure(3, weight=1)
@@ -301,39 +364,40 @@ class App:
         ttk.Entry(adv, textvariable=self.bo_constraint, width=34).grid(row=0, column=3, sticky="ew", padx=4)
         ttk.Label(adv, text="Region manual").grid(row=1, column=0, sticky="w", pady=(4, 0))
         self.e_region = ttk.Entry(adv, textvariable=self.bo_region, width=34)
-        self.e_region.grid(row=1, column=1, columnspan=2, sticky="w", padx=4, pady=(4, 0))
-        ttk.Label(adv, text="atau otomatis K:margin").grid(row=1, column=2, sticky="e", pady=(4, 0))
+        self.e_region.grid(row=1, column=1, sticky="w", padx=(4, 12), pady=(4, 0))
+        ttk.Label(adv, text="atau otomatis K:margin").grid(row=1, column=2, sticky="w", padx=(0, 4), pady=(4, 0))
         self.e_region_auto = ttk.Entry(adv, textvariable=self.bo_region_auto, width=12)
         self.e_region_auto.grid(row=1, column=3, sticky="w", padx=4, pady=(4, 0))
         ttk.Label(adv, text="Margin PoF").grid(row=2, column=0, sticky="w", pady=(4, 0))
-        ttk.Entry(adv, textvariable=self.bo_margin, width=34).grid(row=2, column=1, columnspan=2, sticky="w", padx=4, pady=(4, 0))
+        ttk.Entry(adv, textvariable=self.bo_margin, width=34).grid(row=2, column=1, sticky="w", padx=(4, 12), pady=(4, 0))
         chk = ttk.Frame(adv)
-        chk.grid(row=2, column=3, sticky="w", pady=(4, 0))
+        chk.grid(row=2, column=2, columnspan=2, sticky="w", pady=(4, 0))
         ttk.Checkbutton(chk, text="Kalibrasi std", variable=self.bo_calib).pack(side="left", padx=(4, 12))
         ttk.Checkbutton(chk, text="Gain komposit", variable=self.bo_comp).pack(side="left")
         ttk.Label(adv, text="Sweep batas").grid(row=3, column=0, sticky="w", pady=(4, 0))
-        ttk.Entry(adv, textvariable=self.bo_sweep, width=34).grid(row=3, column=1, columnspan=2, sticky="w", padx=4, pady=(4, 0))
+        ttk.Entry(adv, textvariable=self.bo_sweep, width=34).grid(row=3, column=1, sticky="w", padx=(4, 12), pady=(4, 0))
         sub = ttk.Frame(adv)
-        sub.grid(row=3, column=3, sticky="w", pady=(4, 0))
+        sub.grid(row=3, column=2, columnspan=2, sticky="w", pady=(4, 0))
         ttk.Label(sub, text="Diversity R").pack(side="left", padx=(4, 4))
         ttk.Entry(sub, textvariable=self.bo_div, width=6).pack(side="left", padx=(0, 12))
         ttk.Checkbutton(sub, text="Region adaptif", variable=self.bo_radapt, command=self._toggle_radapt).pack(side="left")
-        ttk.Label(adv, foreground="#666", wraplength=950, justify="left",
+        autowrap(ttk.Label(adv, foreground="#666", wraplength=950, justify="left",
                   text="contoh: constraint bw_mhz>=120 | region Lp=16:19,WD=7:8 | region otomatis 8:0.15 | margin fr_ghz=0.08 | "
                        "sweep gain_fr_ieee_dbi=4.0:5.4 (butuh Fokus dan jumlah kandidat >= 2; satu batas per kandidat) | "
                        "diversity 0.4 (R > 0.3 agar terasa) | region adaptif menggantikan region manual dan otomatis",
-                  ).grid(row=4, column=0, columnspan=4, sticky="w", pady=(4, 0))
+                  )).grid(row=4, column=0, columnspan=4, sticky="ew", pady=(4, 0))
         bar = ttk.Frame(t)
-        bar.grid(row=2, column=0, sticky="w", pady=8)
+        bar.grid(row=2, column=0, sticky="ew", pady=8)
         bar_a = ttk.Frame(bar)
-        bar_a.pack(anchor="w")
+        bar_a.pack(fill="x")
         for text, fn in [("Usulkan kandidat", self.do_suggest), ("Kurva konvergensi", self.do_report), ("Uji BO vs acak (backtest)", self.do_backtest)]:
             b = ttk.Button(bar_a, text=text, command=fn)
             b.pack(side="left", padx=(0, 8))
             self.buttons.append(b)
         ttk.Button(bar_a, text="Pakai kandidat di tab 2", command=self.use_candidates).pack(side="left", padx=(8, 0))
+        make_flow(bar_a)
         bar_b = ttk.Frame(bar)
-        bar_b.pack(anchor="w", pady=(6, 0))
+        bar_b.pack(fill="x", pady=(6, 0))
         ttk.Label(bar_b, text="Analisis model:").pack(side="left", padx=(0, 8))
         for text, fn in [("Validasi maju", self.do_validate), ("Validasi + bandingkan PoF (lambat)", self.do_validate_pof),
                          ("Sensitivitas (ARD, Sobol)", self.do_sensitivity)]:
@@ -341,12 +405,13 @@ class App:
             b.pack(side="left", padx=(0, 8))
             self.buttons.append(b)
         ttk.Button(bar_b, text="Rentang parameter...", command=self.open_bounds).pack(side="left", padx=(8, 0))
-        ttk.Label(t, textvariable=self.warn_var, foreground="#b45f06", wraplength=1000).grid(row=3, column=0, sticky="w")
+        make_flow(bar_b)
+        autowrap(ttk.Label(t, textvariable=self.warn_var, foreground="#b45f06", wraplength=1000)).grid(row=3, column=0, sticky="w")
         cbox = ttk.Frame(t)
         cbox.grid(row=4, column=0, sticky="nsew", pady=(4, 0))
         cbox.columnconfigure(0, weight=1)
         cbox.rowconfigure(0, weight=1)
-        self.cand = ttk.Treeview(cbox, show="headings", height=8)
+        self.cand = ttk.Treeview(cbox, show="headings", height=5)
         csb = ttk.Scrollbar(cbox, command=self.cand.yview)
         self.cand.configure(yscrollcommand=csb.set)
         self.cand.grid(row=0, column=0, sticky="nsew")
@@ -357,10 +422,10 @@ class App:
         t.columnconfigure(0, weight=1)
         t.rowconfigure(1, weight=1)
         top = ttk.Frame(t)
-        top.grid(row=0, column=0, sticky="w")
+        top.grid(row=0, column=0, sticky="ew")
         self.fig_var = tk.StringVar()
         row_a = ttk.Frame(top)
-        row_a.pack(anchor="w")
+        row_a.pack(fill="x")
         ttk.Label(row_a, text="Gambar").pack(side="left")
         self.fig_cb = ttk.Combobox(row_a, textvariable=self.fig_var, state="readonly", width=34)
         self.fig_cb.pack(side="left", padx=6)
@@ -369,8 +434,9 @@ class App:
         b = ttk.Button(row_a, text="Buat kurva Pareto (semua run)", command=self.do_pareto)
         b.pack(side="left", padx=6)
         self.buttons.append(b)
+        make_flow(row_a)
         row_b = ttk.Frame(top)
-        row_b.pack(anchor="w", pady=(6, 0))
+        row_b.pack(fill="x", pady=(6, 0))
         self.rep_focus = tk.StringVar(value="")
         self.rep_constraint = tk.StringVar(value="")
         ttk.Label(row_b, text="Laporan: fokus").pack(side="left")
@@ -381,8 +447,9 @@ class App:
         b.pack(side="left", padx=(0, 6))
         self.buttons.append(b)
         ttk.Button(row_b, text="Buka folder laporan", command=self.open_compare).pack(side="left")
-        ttk.Label(t, foreground="#666", text="contoh constraint: MicrostripAntena_RO4350B:gain_fr_ieee_dbi>=5.0; MicrostripAntena_RO4350B:gain_fr_ieee_dbi>=4.0   (keluaran di data/_compare)",
-                  ).grid(row=2, column=0, sticky="w")
+        make_flow(row_b)
+        autowrap(ttk.Label(t, foreground="#666", text="contoh constraint: MicrostripAntena_RO4350B:gain_fr_ieee_dbi>=5.0; MicrostripAntena_RO4350B:gain_fr_ieee_dbi>=4.0   (keluaran di data/_compare)",
+                  )).grid(row=2, column=0, sticky="ew")
         if ZoomImage is not None:                              # dengan Pillow: zoom (roda mouse), geser (seret), simpan tampilan
             self.zoom = ZoomImage(t)
             self.zoom.grid(row=1, column=0, sticky="nsew", pady=8)
@@ -426,39 +493,64 @@ class App:
             self.bo_focus.set("otomatis")
 
     def _set_status_text(self, text, tags=None):
-        self.status_text.configure(state="normal")
-        self.status_text.delete("1.0", "end")
-        self.status_text.insert("end", text, tags or ())
-        self.status_text.configure(state="disabled")
+        self._status_full = self._status_compact = [(text, tags or ())]
+        self._apply_status()
+
+    def toggle_status_detail(self):
+        self.status_detail = not self.status_detail
+        self.detail_btn.configure(text="Ringkas" if self.status_detail else "Detail")
+        self._apply_status()
+
+    def _apply_status(self):
+        """Tampilkan status ringkas (2 baris, huruf proporsional) atau detail (semua baris, huruf lebar tetap)."""
+        segs = self._status_full if self.status_detail else self._status_compact
+        n = sum(t.count("\n") for t, _ in segs) + (0 if segs and segs[-1][0].endswith("\n") else 1)
+        tw = self.status_text
+        tw.configure(state="normal", font="TkFixedFont" if self.status_detail else "TkDefaultFont",
+                     height=max(2, min(n, 12)))
+        tw.delete("1.0", "end")
+        for text, tags in segs:
+            tw.insert("end", text, tags)
+        tw.configure(state="disabled")
 
     def _render_status(self, s):
         if "error" in s and "run" not in s:
             self._set_status_text(s["error"], ("err",))
             return
-        self.status_text.configure(state="normal")
-        self.status_text.delete("1.0", "end")
-        w = self.status_text.insert
+        full, compact, warns = [], [], []
+
+        def w(_end, text, tags=()):
+            full.append((text, tags))
         w("end", f"Desain  : {s['design']} ({s['design_name']})\nRun     : {s['run']}   {s['run_dir']}\n")
+        line1 = f"{s['design']}"          # nama run dan folder ada di tampilan Detail (baris ringkas harus muat di layar 1366 px)
         if "note" in s:
             w("end", s["note"] + "\n", ("warn",))
+            warns.append(s["note"])
         if "error" in s:
             w("end", f"[error] dataset gagal dimuat: {s['error']}\n", ("err",))
+            warns.append("dataset gagal dimuat")
+        line2 = ""
         if "n_samples" in s:
             st = s["stage"]
             w("end", f"Sampel  : {s['n_samples']} (awal {s['n_initial']}, BO {s['n_bo']})   "
                      f"Tahap BO: {st['index']}/{st['total']} {st['name']}   "
                      f"objective: {s['objective']['goal']} {s['objective']['column']}\n")
             w("end", f"Feasible: {s['n_feasible']} dari {s['n_samples']} memenuhi constraint tahap ini\n")
+            line1 += f"  |  {s['n_samples']} sampel (BO {s['n_bo']})  |  tahap {st['index']}/{st['total']}  |  feasible {s['n_feasible']}"
             if "best" in s:
                 b = s["best"]
                 extra = "  ".join(f"{k}={b[k]:.3g}" for k in ("fr_ghz", "rl_min_db", "bw_mhz", "gain_fr_ieee_dbi")
                                   if k in b and k != s["objective"]["column"])
                 tag = "Terbaik " if b["feasible"] else "Terbaik (belum ada yang feasible) "
                 w("end", f"{tag}: sampel {b['sample_id']}   {s['objective']['column']}={b['value']:.4g}   {extra}\n")
+                line2 = f"{tag.strip()}: sampel {b['sample_id']}   {s['objective']['column']}={b['value']:.4g}   {extra}"
             for h in s.get("bound_hits", []):
-                w("end", f"[peringatan] {h['param']} menempel batas {h['side']} ({h['bound']:g}) pada {h['n']}/{h['of']} desain terbaik\n", ("warn",))
+                msg = f"{h['param']} menempel batas {h['side']} ({h['bound']:g}) pada {h['n']}/{h['of']} desain terbaik"
+                w("end", f"[peringatan] {msg}\n", ("warn",))
+                warns.append(msg)
         if s.get("bounds_changed"):
             w("end", f"[opsi] Rentang parameter: override aktif ({', '.join(s['bounds_changed'])}); lihat tombol Rentang parameter... di tab 5\n", ("warn",))
+            warns.append("rentang parameter: override aktif")
         f = s.get("files", {})
         parts = []
         for key, label in [("lhs_samples", "lhs_samples"), ("bo_candidates", "kandidat BO"), ("models", "model GPR")]:
@@ -466,7 +558,12 @@ class App:
                 parts.append(f"{label}: {'ada' if f[key]['exists'] else 'belum'}")
         if parts:
             w("end", "Berkas  : " + "   ".join(parts) + "\n")
-        self.status_text.configure(state="disabled")
+        compact.append((line1 + "\n", ()))
+        compact.append((line2, ()))
+        if warns:
+            compact.append(((("   " if line2 else "") + f"[{len(warns)} catatan: tekan Detail]"), ("warn",)))
+        self._status_full, self._status_compact = full, compact
+        self._apply_status()
 
     def _load_metrics(self):
         self.metrics.delete(*self.metrics.get_children())
@@ -557,6 +654,7 @@ class App:
             messagebox.showinfo("Sedang berjalan", "Masih ada proses yang berjalan. Tunggu atau tekan Hentikan.")
             return
         self.warn_var.set("")
+        self._set_log_open(True, auto=True)          # log terbuka otomatis selama perintah berjalan
         self._log(cmd.display(argv) + "\n", "cmd")
         self.state_var.set("Berjalan: " + argv[0])
         for b in self.buttons:
@@ -602,8 +700,16 @@ class App:
             self._log(f"[{'selesai' if ok else 'gagal, kode ' + str(rc)}: {argv[0]}]\n\n", "ok" if ok else "bad")
         self._status_busy = False
         self.refresh_status()
+        if ok and self._log_open and self._log_auto:     # berhasil dan dibuka otomatis: lipat lagi setelah 3 detik (kecuali sedang dibaca)
+            self._cancel_collapse()
+            self._collapse_job = self.root.after(3000, self._auto_collapse)
         if ok and after:
             self.root.after(400, after)
+
+    def _auto_collapse(self):
+        self._collapse_job = None
+        if self._log_open and self._log_auto and not self.runner.busy:
+            self._set_log_open(False)
 
     def stop(self):
         self._user_stopped = self.runner.busy
@@ -611,6 +717,10 @@ class App:
         self._log("[dihentikan oleh pengguna] Bila sedang menjalankan CST, simulasi yang berjalan mungkin masih selesai di CST.\n", "bad")
 
     def _log(self, text, tag=None):
+        last = [ln for ln in text.splitlines() if ln.strip()]
+        if last:                                         # baris terakhir tampil di bilah log saat terlipat
+            self.last_var.set(last[-1].strip())
+            self.last_lbl.configure(foreground={"ok": "#2e7d32", "bad": "#b00020", "warn": "#b45f06", "cmd": "#1565c0"}.get(tag, "#555"))
         self.log.configure(state="normal")
         self.log.insert("end", text, (tag,) if tag else ())
         n = int(self.log.index("end-1c").split(".")[0])
@@ -620,6 +730,7 @@ class App:
         self.log.configure(state="disabled")
 
     def clear_log(self):
+        self.last_var.set("")
         self.log.configure(state="normal")
         self.log.delete("1.0", "end")
         self.log.configure(state="disabled")

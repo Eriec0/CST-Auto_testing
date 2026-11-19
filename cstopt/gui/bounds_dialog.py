@@ -6,6 +6,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 
 from cstopt.gui import commands as cmd
+from cstopt.gui.layout import autowrap, fit_window, make_flow
 
 
 def _fmt(v):
@@ -17,8 +18,7 @@ class BoundsDialog:
         self.app = app
         self.top = tk.Toplevel(app.root)
         self.top.title("Rentang parameter (BOUNDS)")
-        self.top.geometry("980x700")
-        self.top.minsize(860, 560)
+        fit_window(self.top, 980, 700, 640, 420)             # G4a: tidak melebihi layar
         self.top.transient(app.root)
         self.q = queue.Queue()
         self.busy = False
@@ -30,6 +30,8 @@ class BoundsDialog:
         self.status_var = tk.StringVar(value="")
         self._build()
         self.top.protocol("WM_DELETE_WINDOW", self.top.destroy)
+        self._poll_job = None
+        self.top.bind("<Destroy>", self._on_destroy, add="+")
         self._poll()
         self.reload()
 
@@ -38,13 +40,13 @@ class BoundsDialog:
         t = self.top
         t.columnconfigure(0, weight=1)
         t.rowconfigure(2, weight=1)
-        ttk.Label(t, wraplength=940, justify="left", foreground="#444", text=(
+        autowrap(ttk.Label(t, wraplength=940, justify="left", foreground="#444", text=(
             "Rentang parameter adalah domain global yang dijelajahi LHS dan BO. Mengubahnya mengubah normalisasi ruang satuan: hasil Usulkan "
             "kandidat setelahnya TIDAK identik dengan sebelumnya, jalankan Latih model ulang, dan pastikan geometri baru bisa disimulasikan di CST. "
             "Ini berbeda dari Region (subset pencarian per putaran di tab 5). File desain tidak diubah; disimpan sebagai "
-            "data/<RUN>/bounds_override.json.")).grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 4))
+            "data/<RUN>/bounds_override.json."))).grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 4))
         bar = ttk.Frame(t)
-        bar.grid(row=1, column=0, sticky="w", padx=10, pady=(4, 6))
+        bar.grid(row=1, column=0, sticky="ew", padx=10, pady=(4, 6))
         ttk.Label(bar, text="Lebar usulan").pack(side="left")
         ttk.Spinbox(bar, from_=0.05, to=1.0, increment=0.05, textvariable=self.widen, width=5).pack(side="left", padx=(4, 10))
         self.btns = []
@@ -54,6 +56,7 @@ class BoundsDialog:
             b.pack(side="left", padx=(0, 6))
             self.btns.append(b)
         ttk.Button(bar, text="Tutup", command=t.destroy).pack(side="left", padx=(12, 0))
+        make_flow(bar)
         mid = ttk.Frame(t)
         mid.grid(row=2, column=0, sticky="nsew", padx=10)
         mid.columnconfigure(0, weight=1)
@@ -151,6 +154,14 @@ class BoundsDialog:
             self.q.put((done, self.app.runner.capture_json(argv)))
         threading.Thread(target=work, daemon=True).start()
 
+    def _on_destroy(self, e):
+        if e.widget is self.top and self._poll_job is not None:     # hentikan polling agar tidak ada "invalid command name"
+            try:
+                self.top.after_cancel(self._poll_job)
+            except Exception:
+                pass
+            self._poll_job = None
+
     def _poll(self):
         if not self.top.winfo_exists():
             return
@@ -161,7 +172,7 @@ class BoundsDialog:
                 done(res)
         except queue.Empty:
             pass
-        self.top.after(100, self._poll)
+        self._poll_job = self.top.after(100, self._poll)
 
     # ------------------------------------------------------------------ aksi
     def _read_entries(self):

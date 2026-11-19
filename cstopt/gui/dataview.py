@@ -12,6 +12,7 @@ from tkinter import filedialog, messagebox, ttk
 import pandas as pd
 
 from cstopt import paths
+from cstopt.gui.layout import make_flow
 
 OPS = (">=", "<=", "==", "!=", ">", "<")
 X_STEP = 90                                            # piksel per klik panah scrollbar atau per notch roda (Shift+roda)
@@ -164,6 +165,7 @@ class DataTab:
         ttk.Button(r0, text="Ekspor CSV (tampilan ini)", command=self.export_csv).pack(side="left", padx=8)
         ttk.Button(r0, text="Grafik S11 (baris terpilih)", command=lambda: self.open_plot("s11")).pack(side="left")
         ttk.Button(r0, text="Grafik sebar dan Pareto", command=lambda: self.open_plot("scatter")).pack(side="left", padx=8)
+        make_flow(r0)
 
         r1 = ttk.Frame(t)
         r1.grid(row=1, column=0, sticky="ew", pady=(6, 0))
@@ -183,12 +185,14 @@ class DataTab:
             e.bind("<Return>", lambda ev: self.refresh_rows())
         ttk.Button(r1, text="Terapkan", command=self.refresh_rows).pack(side="left")
         ttk.Button(r1, text="Reset", command=self.reset_filters).pack(side="left", padx=4)
+        make_flow(r1)
 
         r2 = ttk.Frame(t)
         r2.grid(row=2, column=0, sticky="ew", pady=(6, 6))
         ttk.Label(r2, text="Kolom:").pack(side="left")
         for g in GROUPS:
             ttk.Checkbutton(r2, text=g, variable=self.grp_vars[g], command=self._rebuild_columns).pack(side="left", padx=(6, 0))
+        make_flow(r2)
 
         box = ttk.Frame(t)
         box.grid(row=3, column=0, sticky="nsew")

@@ -14,6 +14,7 @@ import pandas as pd
 
 from cstopt import paths
 from cstopt.gui.dataview import parse_ids
+from cstopt.gui.layout import fit_window, make_flow
 
 MAX_CURVES = 12
 RL_LINE_DB = -10.0
@@ -61,8 +62,7 @@ class PlotWindow(tk.Toplevel):
         from matplotlib.figure import Figure
         self.dt = data_tab
         self.title("Grafik interaktif")
-        self.geometry("1120x760")
-        self.minsize(720, 520)
+        fit_window(self, 1120, 760, 640, 440)              # G4a: tidak melebihi layar
         self.ids_var = tk.StringVar()
         self.rl_var = tk.BooleanVar(value=True)
         self.xcol = tk.StringVar()
@@ -84,6 +84,7 @@ class PlotWindow(tk.Toplevel):
         ttk.Checkbutton(r1, text="garis -10 dB", variable=self.rl_var).pack(side="left")
         ttk.Button(r1, text="Gambar S11", command=self.draw_s11).pack(side="left", padx=6)
         ttk.Button(r1, text="Pakai baris terpilih di tabel", command=self.use_selection).pack(side="left")
+        make_flow(r1)
 
         r2 = ttk.Frame(self, padding=(8, 6, 8, 0))
         r2.pack(fill="x")
@@ -98,6 +99,7 @@ class PlotWindow(tk.Toplevel):
         ttk.Checkbutton(r2, text="garis Pareto", variable=self.pareto_var).pack(side="left", padx=(8, 0))
         ttk.Checkbutton(r2, text="hanya baris tampilan tabel", variable=self.onlyview_var).pack(side="left", padx=(8, 0))
         ttk.Button(r2, text="Gambar sebar", command=self.draw_scatter).pack(side="left", padx=8)
+        make_flow(r2)
 
         ttk.Label(self, textvariable=self.info_var, foreground="#555", padding=(10, 4, 8, 0)).pack(fill="x")
         self.fig = Figure(figsize=(9, 5.6), dpi=100)
