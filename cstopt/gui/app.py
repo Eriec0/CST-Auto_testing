@@ -22,6 +22,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from cstopt import paths
 from cstopt.gui import commands as cmd
+from cstopt.gui import theme
 from cstopt.gui.dataview import DataTab
 from cstopt.gui.layout import Collapsible, autowrap, fit_window, make_flow, make_scrollable, two_panes
 from cstopt.gui.runner import Runner
@@ -73,6 +74,7 @@ def fmt(v, nd=3):
 class App:
     def __init__(self, root, design=None):
         self.root = root
+        theme.init(root)                              # T1: tema (gelap bawaan; pilihan terakhir tersimpan) sebelum widget dibuat
         root.title("Optimasi antena: CST + GPR + Bayesian Optimization")
         fit_window(root, 1120, 820, 860, 520)             # G4a: ukuran awal dibatasi layar
         self.runner = Runner(MAIN_PY, paths.ROOT)
@@ -100,6 +102,7 @@ class App:
         self._build_log()                            # dipasang di bawah lebih dulu agar tidak pernah terpotong
         self._build_tabs()
         root.protocol("WM_DELETE_WINDOW", self._on_close)
+        theme.retheme(root)                          # T1: warna literal terang di kode tab diganti warna peran tema aktif
         self.refresh_status()
 
     # ------------------------------------------------------------------ tata letak
@@ -116,12 +119,22 @@ class App:
         ttk.Button(f, text="Buka folder data", command=self.open_data).pack(side="left", padx=6)
         self.detail_btn = ttk.Button(f, text="Detail", width=8, command=self.toggle_status_detail)
         self.detail_btn.pack(side="left")
+        self.theme_btn = ttk.Button(f, text=self._theme_label(), width=13, command=self.toggle_theme)
+        self.theme_btn.pack(side="left", padx=6)
         make_flow(f)
         self.status_text = tk.Text(self.root, height=2, wrap="none", font="TkDefaultFont", state="disabled",
                                    background="#f6f6f6", relief="flat", padx=8, pady=4)
         self.status_text.pack(fill="x", padx=10, pady=(6, 4))
         self.status_text.tag_configure("warn", foreground="#b45f06")
         self.status_text.tag_configure("err", foreground="#b00020")
+
+    @staticmethod
+    def _theme_label():
+        return "Tema: gelap" if theme.MODE == "dark" else "Tema: terang"
+
+    def toggle_theme(self):
+        theme.toggle(self.root)
+        self.theme_btn.configure(text=self._theme_label())
 
     def _build_tabs(self):
         self.nb = ttk.Notebook(self.root)
@@ -873,7 +886,7 @@ class App:
         last = [ln for ln in text.splitlines() if ln.strip()]
         if last:                                         # baris terakhir tampil di bilah log saat terlipat
             self.last_var.set(last[-1].strip())
-            self.last_lbl.configure(foreground={"ok": "#2e7d32", "bad": "#b00020", "warn": "#b45f06", "cmd": "#1565c0"}.get(tag, "#555"))
+            self.last_lbl.configure(foreground=theme.color({"ok": "ok", "bad": "bad", "warn": "warn", "cmd": "info"}.get(tag, "muted")))
         self.log.configure(state="normal")
         self.log.insert("end", text, (tag,) if tag else ())
         n = int(self.log.index("end-1c").split(".")[0])

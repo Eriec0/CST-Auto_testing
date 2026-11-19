@@ -10,6 +10,8 @@ from tkinter import filedialog, messagebox, ttk
 
 from PIL import Image, ImageTk
 
+from cstopt.gui import theme
+
 ZOOM_STEP = 1.25
 MAX_SCALE = 16.0
 
@@ -69,7 +71,7 @@ class ZoomImage(ttk.Frame):
         self.canvas.delete("all")
         w = max(self.canvas.winfo_width(), 400)
         h = max(self.canvas.winfo_height(), 300)
-        self.canvas.create_text(w / 2, h / 2, text=text, fill="#555555", width=max(w - 40, 200))
+        self.canvas.create_text(w / 2, h / 2, text=text, fill=theme.color("muted"), width=max(w - 40, 200))
         self.info_var.set("")
 
     # ------------------------------------------------------------------ zoom dan geser

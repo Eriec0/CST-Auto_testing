@@ -18,6 +18,7 @@ import numpy as np
 import pandas as pd
 
 from cstopt import paths
+from cstopt.gui import theme
 from cstopt.gui.dataview import parse_ids
 from cstopt.gui.layout import fit_window, make_flow
 
@@ -160,6 +161,7 @@ class PlotWindow(tk.Toplevel):
         self._pts = None                                   # (x, y, id) titik sebar yang tampil, untuk klik
         self._cand_pts = None                              # (x, y, id, sweep_bound atau None) kandidat di sebar
         self._ann = None
+        self._last = None                                 # T1: grafik terakhir (digambar ulang saat tema berganti)
 
         r1 = ttk.Frame(self, padding=(8, 8, 8, 0))
         r1.pack(fill="x")
@@ -210,15 +212,38 @@ class PlotWindow(tk.Toplevel):
         self.fig = Figure(figsize=(9, 5.6), dpi=100)
         self.ax = self.fig.add_subplot(111)
         self.canvas = FigureCanvasTkAgg(self.fig, master=self)
-        bar = ttk.Frame(self)
-        self.toolbar = NavigationToolbar2Tk(self.canvas, bar, pack_toolbar=False)
-        self.toolbar.update()
-        self.toolbar.pack(side="left", fill="x")
-        bar.pack(side="bottom", fill="x", padx=8, pady=(0, 6))
+        self._tbar = ttk.Frame(self)
+        self._make_toolbar()
+        self._tbar.pack(side="bottom", fill="x", padx=8, pady=(0, 6))
         self.canvas.get_tk_widget().pack(side="top", fill="both", expand=True, padx=8, pady=6)
         self.canvas.mpl_connect("scroll_event", self._on_scroll)
         self.canvas.mpl_connect("button_press_event", self._on_click)
         self.refresh_columns()
+        theme.retheme(self)                               # T1: widget jendela mengikuti tema aktif
+        theme.add_listener(self._on_theme)
+        self.bind("<Destroy>", lambda e: theme.remove_listener(self._on_theme) if e.widget is self else None)
+
+    def _make_toolbar(self):
+        from matplotlib.backends.backend_tkagg import NavigationToolbar2Tk
+        self.toolbar = NavigationToolbar2Tk(self.canvas, self._tbar, pack_toolbar=False)
+        self.toolbar.update()
+        self.toolbar.pack(side="left", fill="x")
+
+    def _on_theme(self, mode):
+        """T1: tema berganti saat jendela terbuka: bilah alat dibuat ulang (ikon mengikuti warna tombol), grafik digambar ulang."""
+        try:
+            self.toolbar.destroy()
+            self._make_toolbar()
+            import matplotlib
+            self.fig.set_facecolor(matplotlib.rcParams["figure.facecolor"])
+            draw = {"s11": self.draw_s11, "scatter": self.draw_scatter, "parallel": self.draw_parallel}.get(self._last)
+            if draw:
+                draw()
+            else:
+                self._reset_axes()
+                self.canvas.draw_idle()
+        except Exception:
+            pass
 
     # ------------------------------------------------------------------ data dari tab
     def refresh_columns(self):
@@ -261,6 +286,7 @@ class PlotWindow(tk.Toplevel):
         self.toolbar.update()                             # kosongkan riwayat zoom
 
     def draw_s11(self):
+        self._last = "s11"
         run = self.dt.run_var.get()
         try:
             ids = parse_ids(self.ids_var.get())
@@ -302,6 +328,7 @@ class PlotWindow(tk.Toplevel):
         self.info_var.set(msg)
 
     def draw_scatter(self):
+        self._last = "scatter"
         df = self.dt.view if (self.onlyview_var.get() and self.dt.view is not None) else self.dt.df
         if df is None or not self.xcol.get() or not self.ycol.get():
             messagebox.showinfo("Sebar", "Belum ada data. Pilih run di tab Data dulu.", parent=self)
@@ -372,6 +399,7 @@ class PlotWindow(tk.Toplevel):
         return f" {len(xv)} kandidat BO{tag} digambar dari prediksi model, bukan hasil simulasi."
 
     def draw_parallel(self):
+        self._last = "parallel"
         df = self.dt.view if (self.onlyview_var.get() and self.dt.view is not None) else self.dt.df
         if df is None:
             messagebox.showinfo("Koordinat paralel", "Belum ada data. Pilih run di tab Data dulu.", parent=self)
@@ -417,9 +445,9 @@ class PlotWindow(tk.Toplevel):
                 n_sel += 1
         cand_msg = self._parallel_candidates(ax, cols, lo, hi)
         for i, c in enumerate(cols):
-            ax.axvline(i, color="#444444", linewidth=0.9, zorder=3)
-            ax.text(i, 1.03, f"{hi[i]:.4g}", ha="center", va="bottom", fontsize=7, color="#444444")
-            ax.text(i, -0.03, f"{lo[i]:.4g}", ha="center", va="top", fontsize=7, color="#444444")
+            ax.axvline(i, color=theme.color("muted"), linewidth=0.9, zorder=3)
+            ax.text(i, 1.03, f"{hi[i]:.4g}", ha="center", va="bottom", fontsize=7, color=theme.color("muted"))
+            ax.text(i, -0.03, f"{lo[i]:.4g}", ha="center", va="top", fontsize=7, color=theme.color("muted"))
         ax.set_xticks(xs)
         ax.set_xticklabels(cols, rotation=30 if len(cols) > 8 else 0, ha="right" if len(cols) > 8 else "center", fontsize=8)
         ax.set_yticks([])
@@ -509,8 +537,8 @@ class PlotWindow(tk.Toplevel):
             label += f"\nbatas sweep {bsw:.4g}"
         self._ann = ev.inaxes.annotate(f"{label}\n({bx:.4g}, {by:.4g})", (bx, by), xytext=(12, 12),
                                        textcoords="offset points", fontsize=8,
-                                       bbox=dict(boxstyle="round", fc="#fffbe6", ec="#999999"),
-                                       arrowprops=dict(arrowstyle="-", color="#666666"), zorder=10)
+                                       bbox=dict(boxstyle="round", fc=theme.color("tip"), ec=theme.color("border")),
+                                       arrowprops=dict(arrowstyle="-", color=theme.color("muted")), zorder=10)
         self.canvas.draw_idle()
         self.picked_id = bid
         self.picked_is_candidate = is_cand

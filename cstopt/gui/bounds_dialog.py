@@ -6,6 +6,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 
 from cstopt.gui import commands as cmd
+from cstopt.gui import theme
 from cstopt.gui.layout import autowrap, fit_window, make_flow
 
 
@@ -78,6 +79,7 @@ class BoundsDialog:
         self.msg.tag_configure("err", foreground="#b00020")
         self.msg.tag_configure("ok", foreground="#2e7d32")
         self.msg.grid(row=4, column=0, sticky="ew", padx=10, pady=(4, 10))
+        theme.retheme(self.top)                              # T1: tema aktif
 
     def _say(self, lines, tag=None):
         self.msg.configure(state="normal")
@@ -108,6 +110,7 @@ class BoundsDialog:
             for v in (r["lo"], r["hi"]):
                 v.trace_add("write", lambda *a, name=p: self._update_mark(name))
             self.rows[p] = r
+        theme.retheme(self.grid_frame)                       # T1: baris baru ikut tema
 
     def _update_mark(self, p):
         r = self.rows[p]
@@ -115,14 +118,14 @@ class BoundsDialog:
         try:
             lo, hi = float(r["lo"].get()), float(r["hi"].get())
         except ValueError:
-            r["mark"].configure(text="angka tidak valid", foreground="#b00020")
+            r["mark"].configure(text="angka tidak valid", foreground=theme.color("bad"))
             return
         if a is not None and (abs(lo - a[0]) > 1e-9 or abs(hi - a[1]) > 1e-9):
-            r["mark"].configure(text="diubah (belum simpan)", foreground="#b45f06")
+            r["mark"].configure(text="diubah (belum simpan)", foreground=theme.color("warn"))
         elif p in self.changed:
-            r["mark"].configure(text="override", foreground="#1565c0")
+            r["mark"].configure(text="override", foreground=theme.color("info"))
         else:
-            r["mark"].configure(text="", foreground="#000")
+            r["mark"].configure(text="", foreground=theme.color("fg"))
 
     def _fill(self, table, changed):
         self.changed = list(changed)
