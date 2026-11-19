@@ -359,3 +359,4 @@ RO4350B: LU bawah, WD atas) dan RO4350B belum konvergen (EI maks 12,7% dari terb
   kernel Matern vs RBF lewat `validate --kernel`, level noise, transformasi input, prior tren. Data hanya 156 dan 185 sampel dan PoF terlalu yakin
   (kemiringan kalibrasi 0,25 sampai 0,36), jadi jangan menjanjikan perbaikan besar; G2 (rentang) kemungkinan lebih berpengaruh daripada perubahan model.
 
+Status 19 November 2026 (T2): tata letak tab 1 sampai 5 dan 7 selesai di sandbox tanpa uji GUI (paketT2); berikutnya T1 tema gelap (`gui/theme.py`).

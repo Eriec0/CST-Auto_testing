@@ -147,3 +147,73 @@ def make_scrollable(parent, padding=12):
     outer.bind("<Unmap>", on_unmap)
     outer.canvas = canvas
     return outer, inner
+
+
+def two_panes(parent, right_width=420, min_total=900, gap=12):
+    """T2: dua panel. Lebar total >= min_total: kiri (melar) dan kanan (lebar tetap) berdampingan; kurang dari itu kanan turun
+    di bawah kiri. Mengembalikan (wadah, kiri, kanan); pasang `wadah` sendiri dengan grid/pack."""
+    from tkinter import ttk
+    box = ttk.Frame(parent)
+    left = ttk.Frame(box)
+    right = ttk.Frame(box, width=right_width)
+    box._mode = None
+
+    def place(e=None):
+        w = box.winfo_width() if e is None else e.width
+        mode = "side" if w >= min_total else "stack"
+        if mode == box._mode:
+            return
+        box._mode = mode
+        for fr in (left, right):
+            fr.grid_forget()
+        for i in range(2):
+            box.columnconfigure(i, weight=0, minsize=0)
+            box.rowconfigure(i, weight=0)
+        if mode == "side":
+            box.columnconfigure(0, weight=1)
+            box.columnconfigure(1, weight=0, minsize=right_width)
+            box.rowconfigure(0, weight=1)
+            left.grid(row=0, column=0, sticky="nsew")
+            right.grid(row=0, column=1, sticky="nsew", padx=(gap, 0))
+        else:
+            box.columnconfigure(0, weight=1)
+            left.grid(row=0, column=0, sticky="nsew")
+            right.grid(row=1, column=0, sticky="nsew", pady=(gap, 0))
+    box.bind("<Configure>", place, add="+")
+    place(type("E", (), {"width": 10 ** 6})())
+    return box, left, right
+
+
+class Collapsible:
+    """T2: bagian yang bisa dilipat (tertutup bawaan). `.frame` dipasang oleh pemanggil; isi ditaruh di `.body`.
+    Tombol judul mengganti tanda segitiga; `info` (StringVar) tampil di sebelah judul, mis. jumlah opsi aktif."""
+
+    def __init__(self, parent, text, open_=False, info_var=None, on_toggle=None):
+        import tkinter as tk
+        from tkinter import ttk
+        self.text = text
+        self.on_toggle = on_toggle
+        self.frame = ttk.Frame(parent)
+        head = ttk.Frame(self.frame)
+        head.grid(row=0, column=0, sticky="ew")
+        self.btn = ttk.Button(head, command=self.toggle)
+        self.btn.pack(side="left")
+        if info_var is not None:
+            ttk.Label(head, textvariable=info_var, foreground="#b45f06").pack(side="left", padx=10)
+        self.body = ttk.Frame(self.frame, padding=(6, 6, 6, 2))
+        self.frame.columnconfigure(0, weight=1)
+        self.is_open = False
+        self.set_open(open_)
+
+    def set_open(self, on):
+        self.is_open = bool(on)
+        self.btn.configure(text=("\u25be " if self.is_open else "\u25b8 ") + self.text)
+        if self.is_open:
+            self.body.grid(row=1, column=0, sticky="ew")
+        else:
+            self.body.grid_forget()
+        if self.on_toggle:
+            self.on_toggle(self.is_open)
+
+    def toggle(self):
+        self.set_open(not self.is_open)

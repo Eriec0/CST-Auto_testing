@@ -154,7 +154,7 @@ class DataTab:
     def _build(self):
         t = self.parent
         t.columnconfigure(0, weight=1)
-        t.rowconfigure(3, weight=1)
+        t.rowconfigure(2, weight=1)
         r0 = ttk.Frame(t)
         r0.grid(row=0, column=0, sticky="ew")
         ttk.Label(r0, text="Run:").pack(side="left")
@@ -186,17 +186,17 @@ class DataTab:
             e.bind("<Return>", lambda ev: self.refresh_rows())
         ttk.Button(r1, text="Terapkan", command=self.refresh_rows).pack(side="left")
         ttk.Button(r1, text="Reset", command=self.reset_filters).pack(side="left", padx=4)
+        # T2: kelompok kolom jadi satu menu centang (menghemat satu baris kontrol)
+        self.col_menu_btn = ttk.Menubutton(r1, text="Kolom \u25be")
+        self.col_menu = tk.Menu(self.col_menu_btn, tearoff=0)
+        for g in GROUPS:
+            self.col_menu.add_checkbutton(label=g, variable=self.grp_vars[g], command=self._rebuild_columns)
+        self.col_menu_btn.configure(menu=self.col_menu)
+        self.col_menu_btn.pack(side="left", padx=(8, 0))
         make_flow(r1)
 
-        r2 = ttk.Frame(t)
-        r2.grid(row=2, column=0, sticky="ew", pady=(6, 6))
-        ttk.Label(r2, text="Kolom:").pack(side="left")
-        for g in GROUPS:
-            ttk.Checkbutton(r2, text=g, variable=self.grp_vars[g], command=self._rebuild_columns).pack(side="left", padx=(6, 0))
-        make_flow(r2)
-
         box = ttk.Frame(t)
-        box.grid(row=3, column=0, sticky="nsew")
+        box.grid(row=2, column=0, sticky="nsew", pady=(6, 0))
         box.columnconfigure(0, weight=1)
         box.rowconfigure(0, weight=1)
         self.tree = ttk.Treeview(box, show="headings", selectmode="extended")
@@ -216,9 +216,9 @@ class DataTab:
         self.tree.bind("<Shift-Button-4>", lambda e: self._xscroll("scroll", -1, "units") or "break")   # Linux
         self.tree.bind("<Shift-Button-5>", lambda e: self._xscroll("scroll", 1, "units") or "break")
 
-        ttk.Label(t, textvariable=self.info_var).grid(row=4, column=0, sticky="w", pady=(6, 0))
-        ttk.Label(t, foreground="#666", text="Hijau: lolos constraint tahap BO saat ini (hanya run desain, sama dengan status di atas). Teks oranye: fr_edge_flag. "
-                  "Contoh filter: bw_mhz>=150; gain_fr_ieee_dbi>=4.5 (pisahkan dengan ;)").grid(row=5, column=0, sticky="w")
+        ttk.Label(t, textvariable=self.info_var).grid(row=3, column=0, sticky="w", pady=(6, 0))
+        ttk.Label(t, foreground="#666", text="Hijau: lolos tahap BO ini (hanya run desain). Oranye: fr_edge_flag. "
+                  "Filter: bw_mhz>=150; gain_fr_ieee_dbi>=4.5 (pisahkan dengan ;)").grid(row=4, column=0, sticky="w")
 
     def _xscroll(self, *args):
         """Perintah scrollbar horizontal: klik panah menggeser X_STEP piksel, seret dan klik palung tetap bawaan."""

@@ -16,13 +16,14 @@ import re
 import subprocess
 import sys
 import threading
+import time
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 from cstopt import paths
 from cstopt.gui import commands as cmd
 from cstopt.gui.dataview import DataTab
-from cstopt.gui.layout import autowrap, fit_window, make_flow, make_scrollable
+from cstopt.gui.layout import Collapsible, autowrap, fit_window, make_flow, make_scrollable, two_panes
 from cstopt.gui.runner import Runner
 
 try:
@@ -35,6 +36,13 @@ MAIN_PY = os.path.join(paths.ROOT, "main.py")
 CST_OK = sys.platform == "win32" and importlib.util.find_spec("cst") is not None
 R2_TARGET = 0.85
 LOG_MAX_LINES = 4000
+
+
+def _descendants(w):
+    """Semua widget turunan (rekursif)."""
+    for c in w.winfo_children():
+        yield c
+        yield from _descendants(c)
 
 
 def open_path(path):
@@ -85,6 +93,9 @@ class App:
         self._log_lines = 8                          # tinggi panel log saat terbuka (baris), bisa digeser
         self._log_auto = False                       # log dibuka otomatis oleh perintah (boleh dilipat lagi sendiri)
         self._collapse_job = None
+        self.qc_last = {"qc": "belum dijalankan", "curves": "belum dijalankan"}     # T2: hasil QC terakhir sesi ini (panel tab 3)
+        self._cur_cmd = None
+        self._cap = []
         self._build_top()
         self._build_log()                            # dipasang di bawah lebih dulu agar tidak pernah terpotong
         self._build_tabs()
@@ -224,9 +235,13 @@ class App:
         return b
 
     def _fill_lhs(self):
-        t = self.tab_lhs
-        autowrap(ttk.Label(t, text="Bangkitkan sampel awal Latin Hypercube (maximin) dari rentang parameter di file desain.",
-                           wraplength=900)).grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 8))
+        box, L, R = two_panes(self.tab_lhs, right_width=400)
+        box.pack(fill="both", expand=True)
+        t = L
+        t.columnconfigure(1, weight=1)
+        autowrap(ttk.Label(t, text="Bangkitkan sampel awal Latin Hypercube (maximin) dari rentang parameter di file desain "
+                                   "(atau dari override rentang bila ada).", wraplength=420, justify="left")
+                 ).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 8))
         self.lhs_n = tk.IntVar(value=80)
         self.lhs_seed = tk.IntVar(value=42)
         self.lhs_report = tk.BooleanVar(value=False)
@@ -235,58 +250,98 @@ class App:
         self._row(t, 3, "", lambda p: ttk.Checkbutton(p, text="Tampilkan perbandingan dengan LHS biasa dan acak",
                                                       variable=self.lhs_report))
         self._btn(t, "Bangkitkan sampel", self.do_lhs, row=4, column=1, sticky="w", pady=10)
-        ttk.Label(t, text="Keluaran: data/<RUN>/samples/lhs_samples.csv. Pembangkitan ulang menimpa berkas itu.",
-                  foreground="#666").grid(row=5, column=0, columnspan=3, sticky="w")
+        autowrap(ttk.Label(t, text="Keluaran: data/<RUN>/samples/lhs_samples.csv. Pembangkitan ulang menimpa berkas itu.",
+                           foreground="#666", wraplength=420, justify="left")).grid(row=5, column=0, columnspan=2, sticky="w")
+        pan = ttk.LabelFrame(R, text="Rentang parameter aktif (mm)", padding=6)
+        pan.pack(fill="both", expand=True)
+        pan.columnconfigure(0, weight=1)
+        cols = ["param", "lo", "hi", "status"]
+        self.rng_tree = ttk.Treeview(pan, columns=cols, show="headings", height=11, selectmode="none")
+        for c, txt, w, an in [("param", "Parameter", 80, "w"), ("lo", "Min", 66, "e"), ("hi", "Maks", 66, "e"), ("status", "Status", 150, "w")]:
+            self.rng_tree.heading(c, text=txt)
+            self.rng_tree.column(c, width=w, anchor=an)
+        self.rng_tree.tag_configure("chg", foreground="#b45f06")
+        rsb = ttk.Scrollbar(pan, command=self.rng_tree.yview)
+        self.rng_tree.configure(yscrollcommand=rsb.set)
+        self.rng_tree.grid(row=0, column=0, sticky="nsew")
+        rsb.grid(row=0, column=1, sticky="ns")
+        self.lhs_info = tk.StringVar(value="")
+        ttk.Label(pan, textvariable=self.lhs_info, foreground="#666").grid(row=1, column=0, columnspan=2, sticky="w", pady=(6, 0))
 
     def _fill_cst(self):
-        t = self.tab_cst
+        box, t, R = two_panes(self.tab_cst, right_width=380, min_total=1000)
+        box.pack(fill="both", expand=True)
         t.columnconfigure(1, weight=1)
         if not CST_OK:
-            autowrap(ttk.Label(t, foreground="#b45f06", wraplength=900,
+            autowrap(ttk.Label(t, foreground="#b45f06", wraplength=560, justify="left",
                                text="CST atau paket Windows tidak terdeteksi di perangkat ini, jadi tab ini nonaktif. "
                                     "Bagian ML (tab lain) tetap bisa dipakai. Untuk mengaktifkan: pip install -r "
                                     "requirements-cst.txt (hanya Windows dengan CST Studio Suite).")).grid(row=0, column=0, columnspan=3, sticky="w")
         else:
             autowrap(ttk.Label(t, text="Buka project di CST lebih dulu (file .cst yang sudah dibangun dengan macro). "
                                        "Hasil ditambahkan ke data/<RUN>/batch_lhs.csv; sampel yang sudah ada dilewati.",
-                               wraplength=900)).grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 8))
+                               wraplength=560, justify="left")).grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 8))
         self.cst_samples = tk.StringVar(value="")
         self.cst_project = tk.StringVar(value="")
         self.cst_auto = tk.BooleanVar(value=True)
         self.cst_limit = tk.IntVar(value=0)
-        e1 = self._row(t, 1, "Berkas sampel", lambda p: ttk.Entry(p, textvariable=self.cst_samples, width=70))
+        self._row(t, 1, "Berkas sampel", lambda p: ttk.Entry(p, textvariable=self.cst_samples, width=44))
         ttk.Button(t, text="Pilih...", command=lambda: self._browse(self.cst_samples, paths.DATA_DIR)).grid(row=1, column=2, padx=6)
-        self._row(t, 2, "Project .cst (opsional)", lambda p: ttk.Entry(p, textvariable=self.cst_project, width=70))
+        self._row(t, 2, "Project .cst (opsional)", lambda p: ttk.Entry(p, textvariable=self.cst_project, width=44))
         ttk.Button(t, text="Pilih...", command=lambda: self._browse(self.cst_project, paths.CST_PROJECTS_DIR)).grid(row=2, column=2, padx=6)
-        ttk.Label(t, text="Kosongkan berkas sampel untuk memakai lhs_samples.csv; kosongkan project agar dideteksi dari CST.",
-                  foreground="#666").grid(row=3, column=1, sticky="w")
+        autowrap(ttk.Label(t, text="Kosongkan berkas sampel untuk memakai lhs_samples.csv; kosongkan project agar dideteksi dari CST.",
+                           foreground="#666", wraplength=420, justify="left")).grid(row=3, column=1, columnspan=2, sticky="w")
         self._row(t, 4, "", lambda p: ttk.Checkbutton(p, text="Tekan Yes otomatis pada dialog CST yang dikenal (--auto-yes)", variable=self.cst_auto))
         self._row(t, 5, "Batas jumlah sampel", lambda p: ttk.Spinbox(p, from_=0, to=500, textvariable=self.cst_limit, width=8))
         bar = ttk.Frame(t)
-        bar.grid(row=6, column=1, sticky="w", pady=10)
+        bar.grid(row=6, column=1, columnspan=2, sticky="ew", pady=10)
         for text, fn in [("Cek koneksi", self.do_probe), ("Cek sampel", self.do_check), ("Jalankan batch", self.do_batch)]:
             b = ttk.Button(bar, text=text, command=fn)
             b.pack(side="left", padx=(0, 8))
             self.buttons.append(b)
-        self.cst_widgets = [w for w in t.winfo_children() if not isinstance(w, ttk.Label)] + list(bar.winfo_children())
+        make_flow(bar)
+        self.cst_widgets = [w for w in _descendants(t) if w.winfo_class() in ("TEntry", "TButton", "TCheckbutton", "TSpinbox")]
         if not CST_OK:
             for w in self.cst_widgets:
                 try:
                     w.state(["disabled"])
                 except Exception:
                     pass
+        pan = ttk.LabelFrame(R, text="Progres simulasi", padding=8)
+        pan.pack(fill="both", expand=True)
+        pan.columnconfigure(0, weight=1)
+        self.sim_bar = ttk.Progressbar(pan, mode="determinate", maximum=1, value=0)
+        self.sim_bar.grid(row=0, column=0, sticky="ew")
+        self.sim_text = tk.StringVar(value="Memuat status ...")
+        ttk.Label(pan, textvariable=self.sim_text, justify="left", wraplength=340).grid(row=1, column=0, sticky="w", pady=(8, 0))
+        ttk.Label(pan, foreground="#666", justify="left", wraplength=340,
+                  text="Bilah: sampel yang sudah disimulasikan dibanding yang masih menunggu (lhs_samples.csv dan bo_candidates.csv)."
+                  ).grid(row=2, column=0, sticky="w", pady=(8, 0))
 
     def _fill_qc(self):
-        t = self.tab_qc
-        autowrap(ttk.Label(t, text="Pemeriksaan kualitas data hasil simulasi (tanpa CST).", wraplength=900)).grid(row=0, column=0, sticky="w", pady=(0, 8))
+        box, t, R = two_panes(self.tab_qc, right_width=420, min_total=900)
+        box.pack(fill="both", expand=True)
+        autowrap(ttk.Label(t, text="Pemeriksaan kualitas data hasil simulasi (tanpa CST).", wraplength=420, justify="left")
+                 ).grid(row=0, column=0, sticky="w", pady=(0, 8))
         bar = ttk.Frame(t)
-        bar.grid(row=1, column=0, sticky="w")
+        bar.grid(row=1, column=0, sticky="ew")
+        t.columnconfigure(0, weight=1)
         for text, fn in [("QC dataset", self.do_qc), ("Verifikasi kurva S11", self.do_curves)]:
             b = ttk.Button(bar, text=text, command=fn)
             b.pack(side="left", padx=(0, 8))
             self.buttons.append(b)
-        ttk.Label(t, text="QC dataset harus berakhir \"Semua pemeriksaan lulus\"; verifikasi kurva harus \"KONSISTEN\".",
-                  foreground="#666").grid(row=2, column=0, sticky="w", pady=8)
+        make_flow(bar)
+        autowrap(ttk.Label(t, text="QC dataset harus berakhir \"Semua pemeriksaan lulus\"; verifikasi kurva harus \"KONSISTEN\".",
+                           foreground="#666", wraplength=420, justify="left")).grid(row=2, column=0, sticky="w", pady=8)
+        pan = ttk.LabelFrame(R, text="Ringkasan data", padding=8)
+        pan.pack(fill="both", expand=True)
+        self.qc_text = tk.StringVar(value="Memuat status ...")
+        ttk.Label(pan, textvariable=self.qc_text, justify="left", wraplength=390).pack(anchor="w")
+        pan2 = ttk.LabelFrame(R, text="QC terakhir (sesi ini)", padding=8)
+        pan2.pack(fill="x", pady=(10, 0))
+        self.qc_last_text = tk.StringVar(value="")
+        ttk.Label(pan2, textvariable=self.qc_last_text, justify="left", wraplength=390).pack(anchor="w")
+        self._render_qc_last()
 
     def _fill_gpr(self):
         t = self.tab_gpr
@@ -315,7 +370,7 @@ class App:
         box.grid(row=2, column=0, sticky="nsew")
         box.columnconfigure(0, weight=1)
         box.rowconfigure(0, weight=1)
-        self.metrics = ttk.Treeview(box, columns=cols, show="headings", height=10)
+        self.metrics = ttk.Treeview(box, columns=cols, show="headings", height=8)
         msb = ttk.Scrollbar(box, command=self.metrics.yview)
         self.metrics.configure(yscrollcommand=msb.set)
         msb.grid(row=0, column=1, sticky="ns")
@@ -324,6 +379,23 @@ class App:
             self.metrics.column(c, width=140 if c == "target" else 100, anchor="w" if c == "target" else "e")
         self.metrics.tag_configure("low", foreground="#b00020")
         self.metrics.grid(row=0, column=0, sticky="nsew")
+        # T2: analisis model dipindah dari tab 5 (isinya soal model, bukan soal usulan kandidat)
+        an = ttk.LabelFrame(t, text="Analisis model", padding=(8, 4, 8, 6))
+        an.grid(row=3, column=0, sticky="ew", pady=(8, 0))
+        an.columnconfigure(0, weight=1)
+        autowrap(ttk.Label(an, foreground="#666", justify="left", wraplength=900,
+                           text="Validasi maju menguji prediksi pada sampel yang datang belakangan; Sensitivitas memakai ARD dan Sobol; "
+                                "Rentang parameter membuka dialog batas parameter (file desain tidak diedit)."
+                           )).grid(row=0, column=0, sticky="ew")
+        abar = ttk.Frame(an)
+        abar.grid(row=1, column=0, sticky="ew", pady=(4, 0))
+        for text, fn in [("Validasi maju", self.do_validate), ("Validasi + bandingkan PoF (lambat)", self.do_validate_pof),
+                         ("Sensitivitas (ARD, Sobol)", self.do_sensitivity)]:
+            b = ttk.Button(abar, text=text, command=fn)
+            b.pack(side="left", padx=(0, 8))
+            self.buttons.append(b)
+        ttk.Button(abar, text="Rentang parameter...", command=self.open_bounds).pack(side="left", padx=(8, 0))
+        make_flow(abar)
 
     def _fill_bo(self):
         t = self.tab_bo
@@ -354,8 +426,11 @@ class App:
         ttk.Label(top, text="Tahap").pack(side="left")
         ttk.Combobox(top, textvariable=self.bo_stage, values=["otomatis", "1", "2"], state="readonly", width=9).pack(side="left", padx=(4, 12))
         make_flow(top)
-        adv = ttk.LabelFrame(t, text="Opsi lanjutan (kosong = perilaku bawaan)", padding=6)
-        adv.grid(row=1, column=0, sticky="ew", pady=(8, 0))
+        # T2: opsi lanjutan dapat dilipat, tertutup bawaan; jumlah opsi aktif tetap terlihat di judulnya
+        self.adv_info = tk.StringVar(value="")
+        self.adv = Collapsible(t, "Opsi lanjutan (kosong = perilaku bawaan)", open_=False, info_var=self.adv_info)
+        self.adv.frame.grid(row=1, column=0, sticky="ew", pady=(8, 0))
+        adv = self.adv.body
         adv.columnconfigure(3, weight=1)
         ttk.Label(adv, text="Fokus").grid(row=0, column=0, sticky="w")
         self.focus_cb = ttk.Combobox(adv, textvariable=self.bo_focus, values=["otomatis"], state="readonly", width=12)
@@ -386,36 +461,35 @@ class App:
                        "sweep gain_fr_ieee_dbi=4.0:5.4 (butuh Fokus dan jumlah kandidat >= 2; satu batas per kandidat) | "
                        "diversity 0.4 (R > 0.3 agar terasa) | region adaptif menggantikan region manual dan otomatis",
                   )).grid(row=4, column=0, columnspan=4, sticky="ew", pady=(4, 0))
+        for v in (self.bo_focus, self.bo_constraint, self.bo_region, self.bo_region_auto, self.bo_margin, self.bo_sweep,
+                  self.bo_div, self.bo_calib, self.bo_comp, self.bo_radapt):
+            v.trace_add("write", lambda *a: self._adv_count())
         bar = ttk.Frame(t)
         bar.grid(row=2, column=0, sticky="ew", pady=8)
-        bar_a = ttk.Frame(bar)
-        bar_a.pack(fill="x")
         for text, fn in [("Usulkan kandidat", self.do_suggest), ("Kurva konvergensi", self.do_report), ("Uji BO vs acak (backtest)", self.do_backtest)]:
-            b = ttk.Button(bar_a, text=text, command=fn)
+            b = ttk.Button(bar, text=text, command=fn)
             b.pack(side="left", padx=(0, 8))
             self.buttons.append(b)
-        ttk.Button(bar_a, text="Pakai kandidat di tab 2", command=self.use_candidates).pack(side="left", padx=(8, 0))
-        make_flow(bar_a)
-        bar_b = ttk.Frame(bar)
-        bar_b.pack(fill="x", pady=(6, 0))
-        ttk.Label(bar_b, text="Analisis model:").pack(side="left", padx=(0, 8))
-        for text, fn in [("Validasi maju", self.do_validate), ("Validasi + bandingkan PoF (lambat)", self.do_validate_pof),
-                         ("Sensitivitas (ARD, Sobol)", self.do_sensitivity)]:
-            b = ttk.Button(bar_b, text=text, command=fn)
-            b.pack(side="left", padx=(0, 8))
-            self.buttons.append(b)
-        ttk.Button(bar_b, text="Rentang parameter...", command=self.open_bounds).pack(side="left", padx=(8, 0))
-        make_flow(bar_b)
+        ttk.Button(bar, text="Pakai kandidat di tab 2", command=self.use_candidates).pack(side="left", padx=(8, 0))
+        make_flow(bar)
         autowrap(ttk.Label(t, textvariable=self.warn_var, foreground="#b45f06", wraplength=1000)).grid(row=3, column=0, sticky="w")
         cbox = ttk.Frame(t)
         cbox.grid(row=4, column=0, sticky="nsew", pady=(4, 0))
         cbox.columnconfigure(0, weight=1)
         cbox.rowconfigure(0, weight=1)
-        self.cand = ttk.Treeview(cbox, show="headings", height=5)
+        self.cand = ttk.Treeview(cbox, show="headings", height=8)
         csb = ttk.Scrollbar(cbox, command=self.cand.yview)
         self.cand.configure(yscrollcommand=csb.set)
         self.cand.grid(row=0, column=0, sticky="nsew")
         csb.grid(row=0, column=1, sticky="ns")
+
+    def _adv_count(self):
+        """Jumlah opsi lanjutan yang terisi (ditampilkan di judul bagian terlipat agar tidak ada setelan tersembunyi)."""
+        n = sum(1 for v in (self.bo_constraint, self.bo_region, self.bo_region_auto, self.bo_margin, self.bo_sweep, self.bo_div)
+                if v.get().strip())
+        n += 1 if self.bo_focus.get() not in ("", "otomatis") else 0
+        n += sum(1 for v in (self.bo_calib, self.bo_comp, self.bo_radapt) if v.get())
+        self.adv_info.set(f"{n} opsi aktif" if n else "")
 
     def _fill_results(self):
         t = self.tab_res
@@ -484,6 +558,7 @@ class App:
         self._status_busy = False
         self.status = s
         self._render_status(s)
+        self._render_panels(s)
         self._load_metrics()
         self._load_candidates()
         self._load_figure_list()
@@ -564,6 +639,80 @@ class App:
             compact.append(((("   " if line2 else "") + f"[{len(warns)} catatan: tekan Detail]"), ("warn",)))
         self._status_full, self._status_compact = full, compact
         self._apply_status()
+
+    # ------------------------------------------------------------------ T2: panel info tab 1 sampai 3
+    def _render_panels(self, s):
+        """Isi panel kanan tab 1 sampai 3 dari status (tanpa memuat model)."""
+        for r in self.rng_tree.get_children():
+            self.rng_tree.delete(r)
+        for p in s.get("params", []):
+            chg = p.get("changed")
+            st = f"override (file: {p['base_lo']:g} sampai {p['base_hi']:g})" if chg else "file desain"
+            self.rng_tree.insert("", "end", tags=("chg",) if chg else (),
+                                 values=[p["name"], f"{p['lo']:g}", f"{p['hi']:g}", st])
+        if "params_error" in s:
+            self.lhs_info.set("Rentang tidak terbaca: " + s["params_error"])
+        elif s.get("n_lhs"):
+            self.lhs_info.set(f"lhs_samples.csv: {s['n_lhs']} baris (diubah {s.get('lhs_time') or '?'})")
+        elif "run" in s:
+            self.lhs_info.set("lhs_samples.csv: belum ada")
+        else:
+            self.lhs_info.set("")
+        n, pl, pb = s.get("n_samples", 0), s.get("pending_lhs", 0), s.get("pending_bo", 0)
+        if "run" not in s:
+            self.sim_bar.configure(maximum=1, value=0)
+            self.sim_text.set(s.get("error", "Status belum tersedia."))
+        else:
+            self.sim_bar.configure(maximum=max(1, n + pl + pb), value=n)
+            nc = s.get("n_curves", 0)
+            lines = [f"Dataset: {n} sampel sudah disimulasikan",
+                     f"Menunggu simulasi: {pl} dari lhs_samples.csv, {pb} dari bo_candidates.csv",
+                     f"Simulasi terakhir: {s.get('last_sim') or 'belum ada dataset'}",
+                     f"Kurva S11: {nc} berkas" + ("" if nc == n else f" (dataset {n} baris, selisih {abs(nc - n)})"),
+                     "CST: " + ("terdeteksi" if CST_OK else "tidak terdeteksi (tombol jalankan nonaktif)")]
+            self.sim_text.set("\n".join(lines))
+        q = s.get("qc_view")
+        if not q:
+            self.qc_text.set(s.get("note") or s.get("error") or "Belum ada data untuk diringkas.")
+        else:
+            lo, hi = q["band"]
+            L = [f"Sampel: {q['n']}   |   kurva S11: {q['n_curves']} berkas"]
+            if "in_band" in q:
+                L.append(f"fr di pita {lo:g} sampai {hi:g} GHz: {q['in_band']} dari {q['n']}")
+            if "rl_ok" in q:
+                L.append(f"RL minimum <= {q['rl_limit']:g} dB: {q['rl_ok']} dari {q['n']}")
+            if "gain_max" in q:
+                L.append(f"Gain di fr: median {q['gain_median']:.2f}, maksimum {q['gain_max']:.2f} dBi")
+            if "bw_max" in q:
+                L.append(f"BW maksimum: {q['bw_max']:.1f} MHz")
+            L.append(f"Sel target kosong: {q['nan_cells']}")
+            self.qc_text.set("\n".join(L))
+
+    def _render_qc_last(self):
+        self.qc_last_text.set(f"QC dataset: {self.qc_last['qc']}\nKurva S11: {self.qc_last['curves']}")
+
+    def _note_qc(self, name, rc):
+        """Simpan ringkasan hasil `qc` / `curves` dari keluarannya (hanya untuk panel tab 3)."""
+        if name not in ("qc", "curves") or self._user_stopped:
+            return
+        lines, stamp = self._cap, time.strftime("%H:%M")
+        bad = sum(1 for x in lines if "[MASALAH]" in x)
+        if name == "qc":
+            if rc != 0 and not lines:
+                res = f"gagal (kode {rc})"
+            elif any("Semua pemeriksaan lulus" in x for x in lines):
+                res = "semua pemeriksaan lulus"
+            else:
+                res = f"{bad} masalah (lihat log)" if bad else f"selesai kode {rc}, hasil tidak dikenali (lihat log)"
+        else:
+            if any("kurva KONSISTEN" in x for x in lines) and not bad:
+                res = "KONSISTEN"
+            elif any("KESIMPULAN" in x for x in lines) or bad:
+                res = "TIDAK konsisten (lihat log)"
+            else:
+                res = f"selesai kode {rc}, hasil tidak dikenali (lihat log)"
+        self.qc_last[name] = f"{res} ({stamp})"
+        self._render_qc_last()
 
     def _load_metrics(self):
         self.metrics.delete(*self.metrics.get_children())
@@ -654,6 +803,7 @@ class App:
             messagebox.showinfo("Sedang berjalan", "Masih ada proses yang berjalan. Tunggu atau tekan Hentikan.")
             return
         self.warn_var.set("")
+        self._cur_cmd, self._cap = argv[0], []
         self._set_log_open(True, auto=True)          # log terbuka otomatis selama perintah berjalan
         self._log(cmd.display(argv) + "\n", "cmd")
         self.state_var.set("Berjalan: " + argv[0])
@@ -674,6 +824,8 @@ class App:
             self.root.after(100, self._poll)
 
     def _on_line(self, line):
+        if self._cur_cmd in ("qc", "curves") and len(self._cap) < 2000:
+            self._cap.append(line)
         tag = "warn" if line.startswith("[peringatan]") or line.startswith("[info]") else None
         if line.startswith("[peringatan]"):
             self.warn_var.set((self.warn_var.get() + "  " + line.strip()).strip())
@@ -692,6 +844,7 @@ class App:
                 except Exception:
                     pass
         ok = rc == 0
+        self._note_qc(argv[0], rc)
         if self._user_stopped:
             self._user_stopped = False
             self.state_var.set("Dihentikan")
@@ -797,13 +950,16 @@ class App:
             m = re.fullmatch(r"\s*([A-Za-z_][\w]*)\s*=\s*(-?\d+(?:\.\d+)?)\s*:\s*(-?\d+(?:\.\d+)?)\s*", sweep)
             if not m:
                 messagebox.showwarning("Sweep", "Format sweep: KOLOM=LO:HI, mis. gain_fr_ieee_dbi=4.0:5.4")
+                self.adv.set_open(True)
                 return False
             if self.bo_focus.get() in ("", "otomatis"):
                 messagebox.showwarning("Sweep", "Sweep hanya dipakai bersama Fokus (pilih fokus di Opsi lanjutan) dan KOLOM harus constraint fokus itu "
                                        "(tambahkan lewat Constraint fokus bila perlu).")
+                self.adv.set_open(True)
                 return False
             if int(self.bo_q.get()) < 2:
                 messagebox.showwarning("Sweep", "Sweep butuh jumlah kandidat minimal 2.")
+                self.adv.set_open(True)
                 return False
         if div:
             try:
@@ -812,6 +968,7 @@ class App:
                 ok = False
             if not ok:
                 messagebox.showwarning("Diversity", "Diversity R harus angka lebih dari 0 (mis. 0.4).")
+                self.adv.set_open(True)
                 return False
         return True
 
