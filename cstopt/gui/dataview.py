@@ -165,6 +165,7 @@ class DataTab:
         ttk.Button(r0, text="Ekspor CSV (tampilan ini)", command=self.export_csv).pack(side="left", padx=8)
         ttk.Button(r0, text="Grafik S11 (baris terpilih)", command=lambda: self.open_plot("s11")).pack(side="left")
         ttk.Button(r0, text="Grafik sebar dan Pareto", command=lambda: self.open_plot("scatter")).pack(side="left", padx=8)
+        ttk.Button(r0, text="Koordinat paralel", command=lambda: self.open_plot("parallel")).pack(side="left")
         make_flow(r0)
 
         r1 = ttk.Frame(t)
@@ -393,6 +394,8 @@ class DataTab:
             w.refresh_columns()
         if mode == "s11":
             w.use_selection()
+        elif mode == "parallel":
+            w.draw_parallel()
         else:
             w.draw_scatter()
 

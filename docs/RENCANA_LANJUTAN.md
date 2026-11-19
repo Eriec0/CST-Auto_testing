@@ -344,6 +344,7 @@ Status pembekuan fitur 24 November untuk pekerjaan GUI: BELUM diputuskan penggun
 | G5a | Dialog substrat (er, tan delta, h; Wf dihitung otomatis lewat `tools/wf50.py`) yang membungkus `tools/new_design.py` | rendah | tidak | `gui/app.py` |
 
 Status 18 November 2026: G1 selesai (paketR); G2a (backend dan CLI `bounds`) selesai (paketS); G2b (dialog GUI) selesai (paketT); G3 sampai G5 menunggu keputusan pengguna.
+Status 19 November 2026: G3 selesai di sandbox kecuali perbaikan `report` (koordinat paralel dan kandidat sweep di grafik: paketAA; `report` menunggu contoh bagian yang kurang); G4a kode selesai (paketZ sampai Z3), G4b dibatalkan.
 
 Catatan penting G2: mengubah BOUNDS mengubah normalisasi ruang satuan, sehingga jarak `--spread`, `--diversity`, dan `min_dist` ikut berubah makna.
 Sampel lama tetap valid dan model dilatih ulang tiap putaran, tetapi hasil tidak identik dengan sebelum pelebaran. Pelebaran otomatis hanya MENGUSULKAN;
