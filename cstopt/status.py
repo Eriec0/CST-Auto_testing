@@ -61,6 +61,7 @@ def summary(design=None):
     s["bounds_changed"] = list(getattr(d, "bounds_changed", []))     # parameter dengan override rentang (bounds_override.json)
     ok = mc.feasible_mask(d, df)
     s["n_feasible"] = int(ok.sum())
+    s["feasible_ids"] = [int(x) for x in ids[ok]]               # untuk sorotan di tab Data GUI
     pool = df[ok] if ok.any() else df
     pool = pool.dropna(subset=[oc]).sort_values(oc, ascending=(d.objective["goal"] == "min"))
     if len(pool):

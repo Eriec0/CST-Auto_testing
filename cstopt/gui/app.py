@@ -21,12 +21,14 @@ from tkinter import filedialog, messagebox, ttk
 
 from cstopt import paths
 from cstopt.gui import commands as cmd
+from cstopt.gui.dataview import DataTab
 from cstopt.gui.runner import Runner
 
 try:
     from PIL import Image, ImageTk
+    from cstopt.gui.viewers import ZoomImage
 except Exception:                                    # pillow opsional (hanya untuk menampilkan gambar)
-    Image = ImageTk = None
+    Image = ImageTk = ZoomImage = None
 
 MAIN_PY = os.path.join(paths.ROOT, "main.py")
 CST_OK = sys.platform == "win32" and importlib.util.find_spec("cst") is not None
@@ -75,6 +77,7 @@ class App:
         self.designs = designs
         self.warn_var = tk.StringVar(value="")
         self._photo = None
+        self._zoom_path = None
         self._user_stopped = False
         self._build_top()
         self._build_tabs()
@@ -107,12 +110,14 @@ class App:
         self.tab_gpr = self._tab("4  Model GPR")
         self.tab_bo = self._tab("5  Optimasi BO")
         self.tab_res = self._tab("6  Hasil")
+        self.tab_data = self._tab("7  Data")
         self._fill_lhs()
         self._fill_cst()
         self._fill_qc()
         self._fill_gpr()
         self._fill_bo()
         self._fill_results()
+        self.data_tab = DataTab(self.tab_data, self)
 
     def _tab(self, title):
         f = ttk.Frame(self.nb, padding=12)
@@ -378,9 +383,15 @@ class App:
         ttk.Button(row_b, text="Buka folder laporan", command=self.open_compare).pack(side="left")
         ttk.Label(t, foreground="#666", text="contoh constraint: MicrostripAntena_RO4350B:gain_fr_ieee_dbi>=5.0; MicrostripAntena_RO4350B:gain_fr_ieee_dbi>=4.0   (keluaran di data/_compare)",
                   ).grid(row=2, column=0, sticky="w")
-        self.fig_label = ttk.Label(t, anchor="center")
-        self.fig_label.grid(row=1, column=0, sticky="nsew", pady=8)
-        self.fig_label.bind("<Configure>", lambda e: self._draw_figure())
+        if ZoomImage is not None:                              # dengan Pillow: zoom (roda mouse), geser (seret), simpan tampilan
+            self.zoom = ZoomImage(t)
+            self.zoom.grid(row=1, column=0, sticky="nsew", pady=8)
+            self.fig_label = None
+        else:                                                  # tanpa Pillow: gambar diam seperti sebelumnya
+            self.zoom = None
+            self.fig_label = ttk.Label(t, anchor="center")
+            self.fig_label.grid(row=1, column=0, sticky="nsew", pady=8)
+            self.fig_label.bind("<Configure>", lambda e: self._draw_figure())
         self.fig_paths = {}
         self.extra_figs = {}                                   # gambar di luar folder figures run (mis. Pareto)
 
@@ -409,6 +420,7 @@ class App:
         self._load_metrics()
         self._load_candidates()
         self._load_figure_list()
+        self.data_tab.sync(s.get("run"), s.get("feasible_ids"))
         self.focus_cb.configure(values=["otomatis"] + list(s.get("foci", [])))
         if self.bo_focus.get() not in self.focus_cb.cget("values"):
             self.bo_focus.set("otomatis")
@@ -512,6 +524,14 @@ class App:
 
     def _draw_figure(self):
         path = self.fig_paths.get(self.fig_var.get())
+        if self.zoom is not None:
+            if not path or not os.path.exists(path):
+                self._zoom_path = None
+                self.zoom.set_message("Belum ada gambar. Jalankan Latih (tab 4) atau Kurva konvergensi (tab 5).")
+            elif (path, os.path.getmtime(path)) != self._zoom_path:      # jangan reset zoom bila gambar sama
+                self._zoom_path = (path, os.path.getmtime(path))
+                self.zoom.set_image(path)
+            return
         if not path or not os.path.exists(path):
             self.fig_label.configure(image="", text="Belum ada gambar. Jalankan Latih (tab 4) atau Kurva konvergensi (tab 5).")
             self._photo = None
