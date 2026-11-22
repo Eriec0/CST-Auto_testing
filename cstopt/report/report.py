@@ -326,10 +326,18 @@ def main():
         df = data[r]
         if "fr_edge_flag" in df.columns and int(df.fr_edge_flag.sum()):
             notes.append(f"{r}: {int(df.fr_edge_flag.sum())} sampel punya fr menempel di tepi sweep; resonansi sebenarnya mungkin di luar rentang sweep.")
+    # bagian 9: pola radiasi, metrik tambahan, fase optimasi (dibaca dari berkas yang ada; gagal tidak menghentikan laporan)
+    md9 = []
+    try:
+        from cstopt.report import pattern as pt
+        md9 = pt.build(runs, data, designs, best, front_all, args.out_dir, band, rl, obj, obj, mc, notes)
+    except Exception as e:                              # noqa: BLE001
+        notes.append(f"Bagian 9 gagal dibuat ({type(e).__name__}: {e}); bagian 1 sampai 8 tetap valid.")
     md += ["## 8. Catatan otomatis", ""]
     allnotes = warns + notes
     md += [f"- {n}" for n in allnotes] if allnotes else ["- Tidak ada peringatan."]
     md.append("")
+    md += md9
     path = os.path.join(args.out_dir, "report.md")
     with open(path, "w", encoding="utf-8") as fh:
         fh.write("\n".join(md))

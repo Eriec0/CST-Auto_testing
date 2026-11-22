@@ -19,6 +19,7 @@ sendiri-sendiri; baca hanya bagian tugas yang sedang dikerjakan.
 10. Umpan balik jujur
 11. Templat prompt untuk percakapan baru
 12. Lampiran: angka acuan dan jebakan
+13. Rencana penutup (20 November 2026): report per desain, laporan, rilis, uji CST, fitur lanjutan, demonstrasi
 
 ---
 
@@ -35,6 +36,8 @@ sendiri-sendiri; baca hanya bagian tugas yang sedang dikerjakan.
 4. Setelah tugas selesai, perbarui `CLAUDE.md` bagian 5 dan 6 (temuan dan status) dan centang tugas di tabel bagian 2.
 
 ## 1. Keadaan saat ini (ringkas)
+
+> Diperbarui 20 November 2026: isi bagian ini adalah keadaan 16 November dan sebagian usang (FR-4 156 sampel, RO4350B 185 sampel dan selesai). Rencana kerja terbaru ada di bagian 13.
 
 - Alur lengkap sudah jalan: `py main.py` (GUI) dan perintah `lhs run qc curves train suggest backtest pareto status`; satu project CST = satu `RUN_NAME`
   = satu folder `data/<RUN>/`; satu desain = satu file di `designs/`.
@@ -360,3 +363,146 @@ RO4350B: LU bawah, WD atas) dan RO4350B belum konvergen (EI maks 12,7% dari terb
   (kemiringan kalibrasi 0,25 sampai 0,36), jadi jangan menjanjikan perbaikan besar; G2 (rentang) kemungkinan lebih berpengaruh daripada perubahan model.
 
 Status 19 November 2026 (T2): tata letak tab 1 sampai 5 dan 7 selesai di sandbox tanpa uji GUI (paketT2); berikutnya T1 tema gelap (`gui/theme.py`).
+
+---
+
+## 13. Rencana penutup (disepakati 20 November 2026): report per desain, laporan, rilis, uji CST, fitur lanjutan, demonstrasi
+
+Bagian ini menggantikan urutan kerja di bagian 3 untuk sisa waktu. Bagian 1 sampai 12 tetap sebagai referensi (angka bagian 1 adalah keadaan 16 November dan sebagian sudah usang:
+FR-4 kini 156 sampel, RO4350B 185 sampel dan pengumpulan data selesai).
+
+### 13.1 Keputusan pengguna
+
+- Dosen menerima target proposal yang tidak tercapai (target dibuat terlalu tinggi); yang penting gain dan RL tinggi. Target yang meleset ditulis apa adanya, tanpa dikejar lagi.
+- ML di proposal adalah surrogate GPR dengan BO. Tidak ada pembanding ML lain karena riset tidak menyinggungnya. Tidak ada penyetelan BO lagi.
+- GUI, grafik, dan autorun dibuat atas inisiatif sendiri agar pengguna lain tidak perlu CLI. Tidak ada fitur GUI baru; GUI hanya diubah untuk F1.
+- Demonstrasi pada desain antena lain dilakukan setelah kode final dan laporan selesai.
+- Report dijalankan per desain (tidak digabung), supaya demonstrasi tidak ikut membawa desain lama.
+- Impedansi masukan dan pola radiasi 3D dicatat sebagai fitur lanjutan (F11), dikerjakan sebelum demonstrasi.
+
+### 13.2 Temuan yang dipakai (jangan dihitung ulang tanpa perlu)
+
+- RO4350B punya dua fase karena rentang parameter dilebarkan di tengah pengumpulan. Sampel 46 sampai 120 menempel pada WD maksimum 10,0 mm dengan BW fisibel terbaik 127 sampai 134 MHz.
+  Setelah WD dilebarkan (14 mm lalu 18 mm), wilayah WD 15 sampai 18 mm dan LI sekitar 5,8 sampai 6,3 mm memberi BW 190 sampai 247 MHz (13 sampel, id terkecil 146). Sebanyak 91 dari 185 sampel
+  berada di 100 sampai 140 MHz dan hanya 2 sampel di 200 sampai 220 MHz. Itu pergeseran wilayah akibat batas, bukan ketidakstabilan BO. Batas awal 10 mm belum diverifikasi dari riwayat git.
+  Dugaan (BELUM diuji): validasi maju RO4350B yang lemah sebagian berasal dari pergeseran wilayah ini; perlu hitung ulang yang memisahkan dua fase.
+- Impedansi: `export.py` membaca S11 kompleks, tetapi `curves/*.csv` hanya menyimpan magnitudo dalam dB. Fase tidak tersimpan, sehingga Zin dan Smith chart tidak bisa direkonstruksi dari data yang ada.
+- `ff/` berisi DIRECTIVITY (bukan gain) irisan phi = 0 dan phi = 90 di 3,5 GHz dan monitor terdekat fr (RO4350B: 414 berkas, 360 sudut per irisan), dengan kolom Abs(Theta), Abs(Phi), dan Ax.Ratio.
+  Gain dihitung sebagai directivity ditambah 10 log10 efisiensi. Pola 3D tidak ada di data.
+- Tombol Laporan di GUI memanggil `report` tanpa `--runs` dan `--out-dir`, sehingga selalu gabungan dan menimpa `data/_compare`. CLI sudah mendukung per desain (`--runs RUN --out-dir DIR`);
+  diuji di sandbox untuk RO4350B: 8 bagian, tanpa FR-4.
+- Keterbatasan yang harus ditulis di laporan: satu seed dan satu putaran per substrat; perbandingan FR-4 dan RO4350B tidak setara (156 vs 185 sampel, BOUNDS RO diubah tiga kali, syarat gain berbeda);
+  gain diukur di fr, bukan di seluruh pita; tidak ada pembanding surrogate atau optimizer lain.
+
+### 13.3 Tugas
+
+| ID | Tugas | Butuh CST | Pelaksana | Bergantung pada |
+|---|---|---|---|---|
+| F1 | Tombol Laporan di GUI per desain | tidak | Claude | tidak ada |
+| F2 | Bagian 9 laporan: pola 2D, metrik pola, VSWR, efisiensi, tabel ringkas | tidak | Claude | tidak ada |
+| F3 | Gambar fase optimasi (nilai fokus terhadap sample_id) | tidak | Claude | tidak ada |
+| F4 | Membuat report per desain dan memeriksa angkanya | tidak | pengguna dan Claude | F1 sampai F3 |
+| F5 | Memperbarui deviasi_proposal dan ringkasan_dosen | tidak | Claude | F4 |
+| F6 | Naskah laporan final | tidak | pengguna dan Claude | F4, F5 |
+| F7 | `package_dataset` dan tag rilis `v1.0-fr4-ro4350b` | tidak | pengguna | F6, F8 |
+| F8 | Uji CST nyata (daftar periksa) | ya | pengguna | tidak ada |
+| F9 | Pemeriksaan menempel batas di autorun (opsional) | tidak | Claude | tidak ada |
+| F10 | Perbaikan skrip uji `test_gui_t2` (opsional) | tidak | Claude | tidak ada |
+| F11 | Fitur lanjutan: impedansi dan pola 3D (sebelum demonstrasi) | ya | Claude dan pengguna | F8 |
+| F12 | Demonstrasi pada desain antena lain | ya | pengguna dan Claude | F7, F11 |
+
+Status 20 November 2026: F1, F2, dan F3 selesai di sandbox (paketF1; uji `tools/test_report_pattern.py` dan `tools/test_gui_report.py` lulus, `suggest` seed 0 identik). Belum diuji di Windows. Berikutnya F4.
+
+#### F1 Tombol Laporan di GUI per desain
+- `commands.report(runs, focus, constraints, out_dir=None)` menambahkan `--out-dir` bila diisi. CLI tidak berubah (bawaan tetap `data/_compare`).
+- `do_report` memakai run dari desain yang dipilih di kotak Desain dan keluaran `data/_report_<run>`. Opsi "Semua desain (gabungan)" boleh ada, tetapi bukan bawaan.
+- Uji: argumen yang dibentuk (`--runs <run> --out-dir data/_report_<run>`), tombol terkunci saat berjalan, tangkapan layar tab 6.
+
+#### F2 Bagian 9 laporan (modul baru `cstopt/report/pattern.py`, dipanggil dari `report.py`)
+- Pola 2D (polar dan kartesian) irisan phi = 0 dan phi = 90 di 3,5 GHz dan monitor fr, untuk desain terbaik dan desain knee tiap run. Sumbu dan keterangan harus berbunyi directivity (dBi), bukan gain.
+- Metrik dari `ff/`: HPBW bidang E dan H, front to back ratio, level cross pol (selisih komponen), axial ratio di boresight, arah puncak. Tulis kolom sumbernya dan asumsi bidang E dan H.
+- VSWR terhadap frekuensi dari `curves/` (VSWR = (1 + |S11|) / (1 - |S11|)) dan efisiensi radiasi serta total terhadap frekuensi dari `eff/`.
+- Tabel ringkas desain final: dimensi, fr, RL minimum, VSWR, BW, cakupan pita, directivity, gain, efisiensi. Tabel toleransi bila `data/<run>_tol` ada.
+- Berkas yang tidak ada dilewati dengan catatan di laporan, bukan galat. Keluaran PNG dan markdown. Uji pada data RO4350B dan FR-4 di sandbox; tanpa CST.
+
+#### F3 Gambar fase optimasi
+- `report` menambah gambar nilai fokus (BW) terhadap `sample_id`, berwarna oleh satu parameter. Bawaan: parameter dengan korelasi Spearman terbesar terhadap fokus; `--color-by` untuk menimpa.
+  Garis penanda perubahan rentang bila `bounds_override.json` ada. Untuk RO4350B diharapkan menonjolkan WD. Tanpa CST; PNG.
+
+Aturan uji F1 sampai F3 (bagian 9 tetap berlaku): `suggest -q 5 --seed 0 --restarts 2 --pool 8192` FR-4 harus IDENTIK (md5 `c69126f3`), `smoke_test`, semua `test_gui_*` (dua kegagalan lama:
+`test_gui_t1` jendela grafik di sandbox dan `test_gui_t2` bagian B, bukan dari perubahan baru), dan `report` dijalankan per desain.
+
+#### F4 Membuat report
+```
+py main.py report --runs MicrostripAntena --out-dir data\_report_fr4
+py main.py report --runs MicrostripAntena_RO4350B --out-dir data\_report_ro4350b
+py main.py report --runs MicrostripAntena MicrostripAntena_RO4350B --out-dir data\_compare
+```
+Periksa: angka di bagian 3 dan 4 sama dengan `batch_lhs.csv`; cakupan pita desain terbaik dicantumkan; tidak ada klaim di luar tabel; titik referensi hypervolume sama untuk kedua substrat.
+Syarat gain per run lewat `--constraint "RUN:kolom>=nilai"`.
+
+#### F5 Dokumen deviasi dan ringkasan dosen
+Tambahkan: dua fase RO4350B (angka di 13.2), cakupan pita desain final dengan angka dari kurva, penegasan bahwa dosen menerima target yang meleset, dan daftar keterbatasan di 13.2.
+
+#### F6 Naskah laporan final (28 November)
+Kerangka: (1) latar dan target proposal beserta deviasinya; (2) metode: LHS, CST, GPR, probabilitas kelayakan dan constraint, BO, region dan margin; (3) hasil FR-4 dan batas fisiknya (pilot h, kontrol tan delta);
+(4) hasil RO4350B dalam dua fase; (5) Pareto, hypervolume, desain terpilih, pola radiasi dan metrik; (6) validasi: validasi maju, sensitivitas, backtest, mesh rapat, toleransi; (7) keterbatasan; (8) cara memakai alat (GUI dan CLI) dan reproduksibilitas.
+Prosa akademik tanpa tanda hubung dan em dash. Setiap angka bersumber dari tabel F4.
+
+#### F7 Dataset dan rilis
+`py tools\package_dataset.py`, lalu tag `v1.0-fr4-ro4350b` setelah F8. Bila F8 tidak sempat, tag boleh dibuat tetapi catatan rilis harus jujur menyebut bahwa `run` belum diuji ulang di CST setelah refactor P1-1.
+
+#### F8 Uji CST nyata (daftar periksa pengguna, dengan catatan hasil di PROGRESS.md)
+1. `BASE_PARAMS` RO4350B terisi dan cocok dengan project CST.
+2. `py main.py run --check-samples`, lalu `py main.py run --limit 1`, lalu `py main.py export`.
+3. Autorun kecil: `py main.py autorun --batches 1 --qc --train --project <file.cst> -- -q 2`; periksa `auto_run_log.csv`.
+4. Hentikan di tengah simulasi (tombol Hentikan dan Ctrl+C), mulai ulang, pastikan tidak ada simulasi ganda dan tidak ada proses CST yatim.
+5. `py tools\test_gui_autorun.py` dan semua `test_gui_*` di Windows; catat yang gagal.
+
+#### F9 Pemeriksaan menempel batas di autorun (opsional, menunggu persetujuan)
+`--bounds-check warn|stop|off`. Di akhir tiap batch periksa sampel terbaik dan kandidat; bila sebuah parameter berada dalam 2% rentang dari batas pada sampel terbaik atau pada separuh kandidat atau lebih,
+tulis pesan dan (mode stop) berhenti dengan kode 4. Autorun TIDAK melebarkan sendiri; pelebaran lewat dialog Rentang parameter lalu lanjutkan. Hanya menyentuh `autorun.py` dan `gui/commands.py`; uji dengan `mock_run`.
+
+#### F10 Perbaikan skrip uji `test_gui_t2` (opsional)
+Bagian B memakai `a.lhs_info.master` padahal `lhs_info` adalah StringVar. Ini galat di skrip uji, bukan di GUI.
+
+#### F11 Fitur lanjutan sebelum demonstrasi (BELUM dikerjakan; di luar pembekuan 24 November karena tidak mengubah inti BO)
+- **Impedansi masukan.** Simpan S11 kompleks (Re dan Im) ke folder baru `smith/` per sampel; JANGAN mengubah format `curves/` agar `curves --verify` dan data lama tetap valid. Alat `tools/export_s11_complex.py`
+  untuk 2 sampai 3 desain final yang sudah ada (butuh membuka project di CST; bila hasil tidak tersimpan, simulasi ulang). Di laporan: Zin(f) = 50 (1 + S11) / (1 - S11) (Re dan Im terhadap frekuensi), Smith chart, dan impedansi di fr.
+  Risiko: format ekspor S kompleks di CST belum teruji; butuh uji CST nyata.
+- **Pola radiasi 3D.** Ekspor farfield 3D (theta 0 sampai 180, phi 0 sampai 360, langkah 5 derajat, sekitar 2.600 titik) hanya untuk 2 sampai 3 desain final di 3,5 GHz dan fr, bukan semua sampel (berkas besar).
+  Gambar permukaan dengan matplotlib (PNG), atau tangkapan layar dari CST. Butuh CST.
+- Keduanya opsional dan terpisah (mati secara bawaan atau di folder baru). Bila selesai sebelum 28 November boleh masuk laporan sebagai tambahan; bila tidak, masuk daftar pekerjaan lanjutan.
+
+#### F12 Demonstrasi pada desain antena lain
+1. Pilih antena dengan parameter dan substrat yang jelas. Sampel butuh sekitar 5 menit di CST, jadi rencanakan total simulasi (misalnya 20 LHS ditambah 3 batch x q).
+2. Buat file desain dengan `tools\new_design.py`. Isi rentang awal LEBAR (pelajaran RO4350B: rentang awal yang sempit membuat BO menempel batas selama 75 sampel); persempit lewat `--region-auto` atau `--region-adapt`.
+3. Buat project CST (satu project = satu RUN_NAME), lalu `lhs`, `run --check-samples`, `run --limit 1`.
+4. `autorun --batches 3 --qc --train -- -q 3` (dengan `--bounds-check` bila F9 ada). Bila sebuah parameter menempel batas, lebarkan lewat dialog Rentang parameter lalu lanjutkan.
+5. `report --runs <RUN_DEMO> --out-dir data\_report_<RUN_DEMO>`.
+Kriteria berhasil: tidak ada perubahan pada kode inti (hanya file desain); laporan terbentuk; jumlah simulasi, waktu, dan R2 validasi silang dicatat. Jangan mengklaim optimum atau keunggulan atas metode lain.
+Sebelum demonstrasi, Claude menulis `docs/panduan_desain_baru.md` (urutan perintah dan aturan rentang awal).
+
+### 13.4 Jadwal
+
+| Tanggal | Pekerjaan |
+|---|---|
+| Jumat 20 November | Rencana diperbarui (ini). F1, F2, F3 (Claude). |
+| Sabtu 21 November | F4 membuat report, F5 dokumen. F8 bila ada akses CST. |
+| Minggu 22 sampai Senin 23 November | Perbaikan temuan dari F4. F9 dan F10 bila disetujui. Lanjutkan F8. Kerangka F6. |
+| Selasa 24 November | PEMBEKUAN FITUR: kode F1 sampai F3 (dan F9 bila dikerjakan) selesai dan lulus uji. Setelah ini hanya perbaikan galat. |
+| Rabu 25 sampai Jumat 27 November | F6 naskah, F7 `package_dataset`. |
+| Sabtu 28 November | Laporan final. |
+| Minggu 29 sampai Senin 30 November | Cadangan, tag rilis (setelah F8). |
+| Selasa 1 Desember | Tenggat. |
+| Setelah laporan final | F11, lalu panduan desain baru, lalu F12. |
+
+Gerbang keputusan: bila waktu kurang, korbankan berurutan F12, F11, F9, F10. F1 sampai F8 tidak dikorbankan. Bila F8 tidak sempat, klaim "alur bisa dipakai ulang di CST" diturunkan menjadi
+"tersedia dan diuji dengan mock_run", dan itu ditulis di laporan.
+
+### 13.5 Belum teruji dan risiko (jujur)
+
+- Semua kode setelah paketT1 (T1, T2, G3, G4a, autorun CLI dan GUI) belum dijalankan di Windows dan belum dengan CST nyata.
+- Kurva dan ff untuk F2 dibaca dari berkas yang sudah ada; bila format berkas desain lain berbeda, F2 harus dilewati dengan catatan, bukan membuat laporan gagal.
+- Dugaan sebab validasi maju RO4350B yang lemah (13.2) belum diuji.
+- Impedansi dan 3D (F11) bergantung pada perilaku ekspor CST yang belum pernah dicoba.

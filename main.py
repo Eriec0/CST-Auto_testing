@@ -19,6 +19,7 @@ Perintah:
   sensitivity sensitivitas model: relevansi ARD dan indeks Sobol (S1, ST)
   report     susun laporan otomatis (report.md dan gambar) dari data yang ada
   bounds     rentang parameter per run: lihat, usulkan pelebaran, atur manual, reset (bounds_override.json)
+  autorun    putaran penuh BO diulang N batch: simulasi, suggest, run, qc, train, log (butuh CST untuk run)
 
 Setiap perintah punya opsi sendiri:  py main.py suggest -h
 """
@@ -46,6 +47,7 @@ COMMANDS = {
     "sensitivity": "cstopt.ml.sensitivity",
     "report": "cstopt.report.report",
     "bounds": "cstopt.ml.bounds",
+    "autorun": "cstopt.autorun",
 }
 CST_ONLY = {"run", "export"}
 CST_MODULES = {"cst", "win32api", "win32gui", "win32con", "pythoncom", "pywinauto", "comtypes"}

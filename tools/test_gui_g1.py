@@ -78,6 +78,7 @@ def main():
     a.do_sensitivity()
     a.rep_focus.set("bw")
     a.rep_constraint.set("R1:gain_fr_ieee_dbi>=5.0; R1:gain_fr_ieee_dbi>=4.0")
+    a.rep_scope.set(gapp.REPORT_SCOPES[1])        # F1: gabungan = perilaku lama (tanpa --runs); desain terpilih diuji di test_gui_report.py
     a.do_make_report()
     names = [c[0] for c in captured]
     check("urutan perintah suggest, validate, validate, sensitivity, report", names == ["suggest", "validate", "validate", "sensitivity", "report"], str(names))

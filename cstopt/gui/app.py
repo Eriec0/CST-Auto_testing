@@ -37,6 +37,7 @@ MAIN_PY = os.path.join(paths.ROOT, "main.py")
 CST_OK = sys.platform == "win32" and importlib.util.find_spec("cst") is not None
 R2_TARGET = 0.85
 LOG_MAX_LINES = 4000
+REPORT_SCOPES = ("Desain terpilih", "Semua desain (gabungan)")
 
 
 def _descendants(w):
@@ -89,6 +90,7 @@ class App:
         self._photo = None
         self._zoom_path = None
         self._user_stopped = False
+        self._auto_active, self._auto_last = False, ""      # auto run: sedang berjalan; pesan berhenti terakhir dari CLI
         self.status_detail = False                   # G4a: status ringkas (2 baris) atau detail
         self._status_full, self._status_compact = [], []
         self._log_open = False
@@ -413,7 +415,7 @@ class App:
     def _fill_bo(self):
         t = self.tab_bo
         t.columnconfigure(0, weight=1)
-        t.rowconfigure(4, weight=1)
+        t.rowconfigure(5, weight=1)
         top = ttk.Frame(t)
         top.grid(row=0, column=0, sticky="ew")
         self.bo_q = tk.IntVar(value=5)
@@ -477,17 +479,38 @@ class App:
         for v in (self.bo_focus, self.bo_constraint, self.bo_region, self.bo_region_auto, self.bo_margin, self.bo_sweep,
                   self.bo_div, self.bo_calib, self.bo_comp, self.bo_radapt):
             v.trace_add("write", lambda *a: self._adv_count())
+        # Auto run: logika ada di CLI `autorun`; GUI hanya membungkusnya sebagai subprocess
+        self.auto_n = tk.IntVar(value=5)
+        self.auto_qc = tk.BooleanVar(value=True)
+        self.auto_train = tk.BooleanVar(value=True)
+        self.auto_msg = tk.StringVar(value="")
+        auto = ttk.Frame(t)
+        auto.grid(row=2, column=0, sticky="ew", pady=(8, 0))
+        arow = ttk.Frame(auto)
+        arow.pack(fill="x")
+        ttk.Label(arow, text="Auto run: batch").pack(side="left")
+        ttk.Spinbox(arow, from_=1, to=99, textvariable=self.auto_n, width=4).pack(side="left", padx=(4, 12))
+        ttk.Checkbutton(arow, text="QC", variable=self.auto_qc).pack(side="left", padx=(0, 12))
+        ttk.Checkbutton(arow, text="Latih GPR", variable=self.auto_train).pack(side="left", padx=(0, 12))
+        self.auto_btn = ttk.Button(arow, text="Mulai auto run", command=self.do_autorun)
+        self.auto_btn.pack(side="left")
+        self.buttons.append(self.auto_btn)
+        if not CST_OK:
+            self.auto_btn.state(["disabled"])
+        make_flow(arow)
+        autowrap(ttk.Label(auto, textvariable=self.auto_msg, foreground="#666", wraplength=900, justify="left")).pack(fill="x", pady=(2, 0))
+        self._auto_box = (top, self.adv.body, arow)
         bar = ttk.Frame(t)
-        bar.grid(row=2, column=0, sticky="ew", pady=8)
+        bar.grid(row=3, column=0, sticky="ew", pady=8)
         for text, fn in [("Usulkan kandidat", self.do_suggest), ("Kurva konvergensi", self.do_report), ("Uji BO vs acak (backtest)", self.do_backtest)]:
             b = ttk.Button(bar, text=text, command=fn)
             b.pack(side="left", padx=(0, 8))
             self.buttons.append(b)
         ttk.Button(bar, text="Pakai kandidat di tab 2", command=self.use_candidates).pack(side="left", padx=(8, 0))
         make_flow(bar)
-        autowrap(ttk.Label(t, textvariable=self.warn_var, foreground="#b45f06", wraplength=1000)).grid(row=3, column=0, sticky="w")
+        autowrap(ttk.Label(t, textvariable=self.warn_var, foreground="#b45f06", wraplength=1000)).grid(row=4, column=0, sticky="w")
         cbox = ttk.Frame(t)
-        cbox.grid(row=4, column=0, sticky="nsew", pady=(4, 0))
+        cbox.grid(row=5, column=0, sticky="nsew", pady=(4, 0))
         cbox.columnconfigure(0, weight=1)
         cbox.rowconfigure(0, weight=1)
         self.cand = ttk.Treeview(cbox, show="headings", height=8)
@@ -526,7 +549,10 @@ class App:
         row_b.pack(fill="x", pady=(6, 0))
         self.rep_focus = tk.StringVar(value="")
         self.rep_constraint = tk.StringVar(value="")
-        ttk.Label(row_b, text="Laporan: fokus").pack(side="left")
+        self.rep_scope = tk.StringVar(value=REPORT_SCOPES[0])
+        ttk.Label(row_b, text="Laporan untuk").pack(side="left")
+        ttk.Combobox(row_b, textvariable=self.rep_scope, values=REPORT_SCOPES, state="readonly", width=22).pack(side="left", padx=(4, 10))
+        ttk.Label(row_b, text="fokus").pack(side="left")
         ttk.Combobox(row_b, textvariable=self.rep_focus, values=["", "bw", "cover", "gain"], state="readonly", width=7).pack(side="left", padx=(4, 10))
         ttk.Label(row_b, text="constraint (pisahkan dengan ;)").pack(side="left")
         ttk.Entry(row_b, textvariable=self.rep_constraint, width=46).pack(side="left", padx=(4, 8))
@@ -535,7 +561,7 @@ class App:
         self.buttons.append(b)
         ttk.Button(row_b, text="Buka folder laporan", command=self.open_compare).pack(side="left")
         make_flow(row_b)
-        autowrap(ttk.Label(t, foreground="#666", text="contoh constraint: MicrostripAntena_RO4350B:gain_fr_ieee_dbi>=5.0; MicrostripAntena_RO4350B:gain_fr_ieee_dbi>=4.0   (keluaran di data/_compare)",
+        autowrap(ttk.Label(t, foreground="#666", text="contoh constraint: MicrostripAntena_RO4350B:gain_fr_ieee_dbi>=5.0; MicrostripAntena_RO4350B:gain_fr_ieee_dbi>=4.0   (keluaran: data/_report_<run> untuk desain terpilih, data/_compare untuk gabungan)",
                   )).grid(row=2, column=0, sticky="ew")
         if ZoomImage is not None:                              # dengan Pillow: zoom (roda mouse), geser (seret), simpan tampilan
             self.zoom = ZoomImage(t)
@@ -837,6 +863,11 @@ class App:
             self.root.after(100, self._poll)
 
     def _on_line(self, line):
+        if self._cur_cmd == "autorun":
+            if line.startswith("[autorun] {") and self._auto_progress(line):
+                return
+            if "BERHENTI" in line or "dihentikan" in line:
+                self._auto_last = line.replace("[autorun] ", "", 1).strip()
         if self._cur_cmd in ("qc", "curves") and len(self._cap) < 2000:
             self._cap.append(line)
         tag = "warn" if line.startswith("[peringatan]") or line.startswith("[info]") else None
@@ -851,12 +882,14 @@ class App:
         for b in self.buttons:
             b.state(["!disabled"])
         if not CST_OK:                                # tombol CST tetap nonaktif
-            for w in self.cst_widgets:
+            for w in list(self.cst_widgets) + [self.auto_btn]:
                 try:
                     w.state(["disabled"])
                 except Exception:
                     pass
         ok = rc == 0
+        if argv[0] == "autorun":
+            self._auto_finish(rc, self._user_stopped)
         self._note_qc(argv[0], rc)
         if self._user_stopped:
             self._user_stopped = False
@@ -985,6 +1018,72 @@ class App:
                 return False
         return True
 
+    # ------------------------------------------------------------------ auto run
+    def _lock_bo(self, lock):
+        """Kunci (atau buka) semua masukan tab 5 selama auto run, agar opsi yang dibaca saat Mulai tidak berubah."""
+        for box in self._auto_box:
+            for w in _descendants(box):
+                if w.winfo_class() in ("TEntry", "TCombobox", "TSpinbox", "TCheckbutton"):
+                    try:
+                        w.state(["disabled"] if lock else ["!disabled"])
+                    except Exception:
+                        pass
+        if not lock:
+            self._toggle_radapt()                      # keadaan entri region mengikuti kotak Region adaptif lagi
+
+    def do_autorun(self):
+        if self.runner.busy:
+            messagebox.showinfo("Sedang berjalan", "Masih ada proses yang berjalan. Tunggu atau tekan Hentikan.")
+            return
+        try:
+            n, q = int(self.auto_n.get()), int(self.bo_q.get())
+            if not 1 <= n <= 99:
+                raise ValueError
+        except (ValueError, tk.TclError):
+            messagebox.showwarning("Auto run", "Jumlah batch harus bilangan bulat 1 sampai 99.")
+            return
+        if not self._check_bo_inputs():
+            return
+        st = getattr(self, "status", None) or {}
+        pend = int(st.get("pending_lhs", 0) or 0) + int(st.get("pending_bo", 0) or 0)
+        mins = cmd.autorun_minutes(n, q, pend)
+        argv = cmd.autorun(n, self.auto_qc.get(), self.auto_train.get(), self.design(), self.cst_project.get().strip() or None,
+                           self._suggest_argv())
+        text = (f"Auto run {n} batch, {q} kandidat per batch, sampel menunggu {pend}.\n\n"
+                f"Estimasi simulasi: ({n} x {q} + {pend}) x 5 menit = {mins:.0f} menit (sekitar {mins / 60:.1f} jam), "
+                f"belum termasuk suggest, QC, dan latih GPR.\n\n"
+                "Semua opsi tab 5 dibaca sekarang lalu dikunci sampai selesai. Hentikan kapan saja; sampel yang sudah "
+                "disimulasikan dilewati saat dilanjutkan.\n\nMulai?")
+        if not messagebox.askokcancel("Mulai auto run", text):
+            return
+        self._auto_active, self._auto_last = True, ""
+        self._lock_bo(True)
+        self.auto_msg.set(f"Batch 1/{n}: memulai ...")
+        self.run_cmd(argv)
+
+    def _auto_progress(self, line):
+        try:
+            d = json.loads(line[len("[autorun] "):])
+        except ValueError:
+            return False
+        txt = cmd.autorun_text(d)
+        if txt:
+            self.auto_msg.set(txt)
+            self.state_var.set("Auto run: " + txt)
+        if d.get("step") == "selesai" and not self._status_busy:
+            self.refresh_status()                      # angka sampel dan terbaik di panel ikut diperbarui tiap batch
+        return True
+
+    def _auto_finish(self, rc, stopped):
+        self._auto_active = False
+        self._lock_bo(False)
+        if stopped or rc == 130:
+            self.auto_msg.set("Dihentikan. Jalankan lagi untuk melanjutkan; sampel yang sudah ada dilewati.")
+        elif rc == 0:
+            self.auto_msg.set(self.auto_msg.get() if self.auto_msg.get().startswith("Selesai") else "Selesai.")
+        else:
+            self.auto_msg.set(f"Berhenti (kode {rc}). " + (self._auto_last or "Lihat log."))
+
     def do_suggest(self):
         if not self._check_bo_inputs():
             return
@@ -1006,12 +1105,28 @@ class App:
         self.run_cmd(cmd.sensitivity(self.design(), self.bo_region_auto.get().strip() or None, self.bo_restarts.get(), self.bo_kernel.get()),
                      after=lambda: self.show_figure("sensitivity.png"))
 
+    def _report_target(self):
+        """(runs, folder keluaran). Desain terpilih: hanya run itu ke data/_report_<run>; gabungan: semua run ke data/_compare."""
+        if self.rep_scope.get() == REPORT_SCOPES[0]:
+            run = self.run_name()
+            if run:
+                return [run], os.path.join(paths.DATA_DIR, f"_report_{run}")
+            return None, None
+        return None, os.path.join(paths.DATA_DIR, "_compare")
+
     def do_make_report(self):
+        runs, out = self._report_target()
+        if out is None:
+            messagebox.showwarning("Laporan", "Run desain belum diketahui (status belum dimuat). Tekan Muat ulang status, atau pilih Semua desain (gabungan).")
+            return
         cons = [c.strip() for c in self.rep_constraint.get().split(";") if c.strip()]
-        self.run_cmd(cmd.report(None, self.rep_focus.get() or None, cons),
-                     after=lambda: self.show_path(os.path.join(paths.DATA_DIR, "_compare", "pareto.png")))
+        self.run_cmd(cmd.report(runs, self.rep_focus.get() or None, cons, out_dir=(out if runs else None)),
+                     after=lambda: self.show_path(os.path.join(out, "pareto.png")))
 
     def open_bounds(self):
+        if self._auto_active:
+            messagebox.showinfo("Auto run", "Rentang parameter dikunci selama auto run berjalan (suggest membacanya tiap batch). Hentikan auto run dulu.")
+            return
         from cstopt.gui.bounds_dialog import BoundsDialog
         dlg = getattr(self, "_bounds_dlg", None)
         if dlg is not None and dlg.top.winfo_exists():
@@ -1020,7 +1135,7 @@ class App:
         self._bounds_dlg = BoundsDialog(self)
 
     def open_compare(self):
-        d = os.path.join(paths.DATA_DIR, "_compare")
+        d = self._report_target()[1] or os.path.join(paths.DATA_DIR, "_compare")
         if not os.path.isdir(d):
             messagebox.showinfo("Belum ada", f"Folder belum ada (jalankan Buat laporan dulu):\n{d}")
             return

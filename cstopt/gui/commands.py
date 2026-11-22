@@ -111,11 +111,13 @@ def sensitivity(design=None, region_auto=None, restarts=2, kernel="rbf"):
     return _design(a, design)
 
 
-def report(runs=None, focus=None, constraints=None):
-    """Laporan otomatis (data/_compare). constraints: daftar teks '[RUN:]kolom>=nilai'."""
+def report(runs=None, focus=None, constraints=None, out_dir=None):
+    """Laporan otomatis (bawaan data/_compare). constraints: daftar teks '[RUN:]kolom>=nilai'. out_dir: folder keluaran."""
     a = ["report"]
     if runs:
         a += ["--runs", *runs]
+    if out_dir:
+        a += ["--out-dir", out_dir]
     if focus:
         a += ["--focus", focus]
     for c in constraints or []:
@@ -140,6 +142,51 @@ def bounds(design=None, propose=False, apply=False, set_=None, reset=False, wide
         a.append("--dry-run")
     a.append("--json")
     return _design(a, design)
+
+
+def autorun(batches, qc=False, train=False, design=None, project=None, suggest_argv=None):
+    """Perintah `autorun`. suggest_argv = hasil suggest(...) (diteruskan apa adanya ke `suggest` setelah `--`)."""
+    a = ["autorun", "--batches", str(int(batches))]
+    if qc:
+        a.append("--qc")
+    if train:
+        a.append("--train")
+    if design:
+        a += ["--design", design]
+    if project:
+        a += ["--project", project]
+    sug = list(suggest_argv or [])
+    if sug and sug[0] == "suggest":
+        sug = sug[1:]
+    return a + ["--"] + sug
+
+
+def autorun_minutes(batches, q, pending=0, per_sample=5.0):
+    """Estimasi menit simulasi: (batch x q + sampel menunggu) x menit per sampel."""
+    return (int(batches) * int(q) + int(pending)) * float(per_sample)
+
+
+def autorun_text(d):
+    """Teks progres dari satu objek JSON baris `[autorun] {...}` (lihat cstopt/autorun.py)."""
+    step, i, n = d.get("step"), d.get("batch"), d.get("of")
+    pre = f"Batch {i}/{n}: " if i and n else ""
+    if step == "simulasi":
+        return f"{pre}simulasi ({d.get('done', 0)}/{d.get('total', 0)} sampel)"
+    if step == "suggest":
+        return f"{pre}suggest (melatih GPR, memilih kandidat)"
+    if step == "qc":
+        return f"{pre}QC"
+    if step == "train":
+        return f"{pre}latih GPR"
+    if step == "selesai":
+        v = d.get("nilai_terbaik")
+        best = f", terbaik {float(v):.4g}" if v not in (None, "") else ""
+        return f"{pre}selesai: {d.get('n_sampel')} sampel, {d.get('n_feasible')} feasible{best}"
+    if step == "selesai_semua":
+        return f"Selesai {d.get('batches')} batch"
+    if step == "berhenti":
+        return f"Berhenti (kode {d.get('kode')})"
+    return ""
 
 
 def pareto(runs=None, all_points=False):
