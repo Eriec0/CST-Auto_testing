@@ -411,6 +411,8 @@ FR-4 kini 156 sampel, RO4350B 185 sampel dan pengumpulan data selesai).
 | F11 | Fitur lanjutan: impedansi dan pola 3D (sebelum demonstrasi) | ya | Claude dan pengguna | F8 |
 | F12 | Demonstrasi pada desain antena lain | ya | pengguna dan Claude | F7, F11 |
 
+Status 22 November 2026: F4a (tambahan di luar daftar awal) selesai di sandbox: desain rekomendasi tahan toleransi (`--min-yield`, bawaan 90), peringatan parameter di batas rentang, dan kalimat target bersamaan di bagian 3; dipicu oleh laporan RO4350B yang memilih sampel 179 (yield toleransi 17,4%). F4 (memeriksa angka laporan) berjalan; F5 memakai temuan ini.
+
 Status 20 November 2026: F1, F2, dan F3 selesai di sandbox (paketF1; uji `tools/test_report_pattern.py` dan `tools/test_gui_report.py` lulus, `suggest` seed 0 identik). Belum diuji di Windows. Berikutnya F4.
 
 #### F1 Tombol Laporan di GUI per desain

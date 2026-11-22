@@ -3,10 +3,10 @@
 ## 1. Informasi reproduksi
 
 - Tanggal: 2026-11-22
-- Commit git: f2a9792fc9a3d23c8a7b1b0786d8209c21d0ab1b
+- Commit git: e5c87d76651d9b2a19c48de80bcc70531d1ba519
 - Paket: Python 3.10.0, numpy 2.2.6, pandas 2.3.3, sklearn 1.7.2, scipy 1.15.3, matplotlib 3.10.9
 - Sampel per run: MicrostripAntena_RO4350B 185 sampel
-- Syarat dasar: fr 3.3 sampai 3.7 GHz dan RL minimum <= -10 dB; desain terbaik dipilih dengan memaksimalkan bw_mhz
+- Syarat dasar: fr 3.3 sampai 3.7 GHz dan RL minimum <= -10 dB; desain BW tertinggi dipilih dengan memaksimalkan bw_mhz; desain rekomendasi: bw_mhz tertinggi di antara desain dengan yield toleransi >= 90%
 
 ## 2. Definisi
 
@@ -20,7 +20,7 @@
 
 ### MicrostripAntena_RO4350B: skenario syarat dasar
 
-Desain terbaik: sampel 179 (177 sampel memenuhi syarat skenario ini).
+Desain dengan bw_mhz tertinggi: sampel 179 (177 sampel memenuhi syarat skenario ini); yield toleransi 17.4% (4 dari 23 skenario lulus; di bawah ambang 90%, tidak tahan toleransi).
 
 | besaran | target proposal | tercapai | selisih terhadap target | status |
 |---|---|---|---|---|
@@ -35,9 +35,24 @@ Desain terbaik: sampel 179 (177 sampel memenuhi syarat skenario ini).
 
 Maksimum terpisah pada skenario ini: BW 247.5 MHz (sampel 179, gain 4.43 dBi); gain 5.82 dBi (sampel 102, BW 115.8 MHz).
 
+Tidak ada sampel yang memenuhi BW >= 200 MHz dan gain >= 5 dBi sekaligus (kedua target proposal). Untuk gain >= 5 dBi, BW terbesar adalah 158.6 MHz (sampel 165, gain 5.03 dBi).
+
+**Desain rekomendasi (tahan toleransi, yield >= 90%)**: sampel 180; yield toleransi 96.4% (27 dari 28 skenario lulus; tahan toleransi).
+
+| besaran | target proposal | tercapai | selisih terhadap target | status |
+|---|---|---|---|---|
+| fr (GHz) | 3.3 sampai 3.7 | 3.514 | 186 MHz dari tepi pita terdekat | tercapai |
+| RL minimum (dB) | <= -10 | -26.4 | -16.4 dB | tercapai |
+| BW (MHz) | >= 200 | 228.2 | +28.2 MHz (114% dari target) | tercapai |
+| BW pecahan (%) | tidak ada | 6.49 |  | acuan |
+| Cakupan pita (%) | tidak ada | 56.9 |  | acuan |
+| Gain IEEE (dBi) | >= 5 | 4.63 | -0.37 dB | tidak tercapai |
+| Efisiensi radiasi di fr (%) | tidak ada | 85.9 |  | acuan |
+| Directivity di fr (dBi) | tidak ada | 5.27 |  | acuan |
+
 ## 4. Parameter desain terbaik
 
-### MicrostripAntena_RO4350B: sampel 179 (skenario syarat dasar)
+### MicrostripAntena_RO4350B: sampel 179 (desain BW tertinggi, skenario syarat dasar)
 
 | parameter | nilai (mm) |
 |---|---|
@@ -52,6 +67,23 @@ Maksimum terpisah pada skenario ini: BW 247.5 MHz (sampel 179, gain 4.43 dBi); g
 | WD | 18.000 |
 | gD | 1.009 |
 | PD | 1.117 |
+| substrat | Rogers RO4350B (lossy): epsilon 3.66, tan delta 0.0037, h 1.524 mm |
+
+### MicrostripAntena_RO4350B: sampel 180 (desain rekomendasi tahan toleransi, skenario syarat dasar)
+
+| parameter | nilai (mm) |
+|---|---|
+| Lp | 17.925 |
+| Wp | 31.006 |
+| LU | 2.368 |
+| WU | 3.560 |
+| gU | 0.709 |
+| PU | 2.788 |
+| LI | 5.972 |
+| LD | 6.495 |
+| WD | 17.838 |
+| gD | 1.165 |
+| PD | 0.740 |
 | substrat | Rogers RO4350B (lossy): epsilon 3.66, tan delta 0.0037, h 1.524 mm |
 
 ## 5. Kurva Pareto
@@ -122,7 +154,7 @@ Sensitivitas ARD dan Sobol (MicrostripAntena_RO4350B):
 
 ## 8. Catatan otomatis
 
-- Tidak ada peringatan.
+- MicrostripAntena_RO4350B: sampel 179 (desain BW tertinggi): WD = 18.000 mm berada di batas atas rentang efektif (18.000 mm); optimum mungkin dibatasi rentang.
 
 ## 9. Pola radiasi, metrik tambahan, dan fase optimasi
 
@@ -134,7 +166,8 @@ Bagian ini dibaca dari berkas yang sudah ada (`curves/`, `eff/`, `ff/`, `batch_l
 
 | sampel | peran | fr (GHz) | RL min (dB) | VSWR | BW (MHz) | cakupan pita (%) | directivity di fr (dBi) | gain di fr (dBi) | eta radiasi di fr | eta total di fr |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 179 | terbaik (syarat dasar) | 3.534 | -22.144 | 1.169 | 247.490 | 61.800 | 5.174 | 4.429 | 0.834 | 0.797 |
+| 179 | BW tertinggi (syarat dasar) | 3.534 | -22.144 | 1.169 | 247.490 | 61.800 | 5.174 | 4.429 | 0.834 | 0.797 |
+| 180 | rekomendasi tahan toleransi | 3.514 | -26.415 | 1.100 | 228.150 | 56.900 | 5.272 | 4.634 | 0.859 | 0.841 |
 | 165 | knee Pareto | 3.616 | -24.900 | 1.121 | 158.570 | 39.400 | 5.669 | 5.026 | 0.823 | 0.647 |
 
 **Pola radiasi 2D (directivity)**
@@ -145,8 +178,10 @@ Bagian ini dibaca dari berkas yang sudah ada (`curves/`, `eff/`, `ff/`, `batch_l
 
 | sampel | peran | f (GHz) | phi | bidang | Dmax (dBi) | arah puncak (derajat) | HPBW (derajat) | F/B (dB) | XPD sektor HPBW (dB) | AR boresight (dB) |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 179 | terbaik (syarat dasar) | 3.50 | 0 | H | 5.17 | 0.00 | 94.08 | 3.42 | 22.90 | 40.00 |
-| 179 | terbaik (syarat dasar) | 3.50 | 90 | E | 5.17 | 0.00 | 82.62 | 3.11 | 84.09 | 40.00 |
+| 179 | BW tertinggi (syarat dasar) | 3.50 | 0 | H | 5.17 | 0.00 | 94.08 | 3.42 | 22.90 | 40.00 |
+| 179 | BW tertinggi (syarat dasar) | 3.50 | 90 | E | 5.17 | 0.00 | 82.62 | 3.11 | 84.09 | 40.00 |
+| 180 | rekomendasi tahan toleransi | 3.50 | 0 | H | 5.27 | 0.00 | 93.28 | 3.63 | 23.93 | 40.00 |
+| 180 | rekomendasi tahan toleransi | 3.50 | 90 | E | 5.27 | 0.00 | 83.22 | 3.33 | 77.63 | 40.00 |
 | 165 | knee Pareto | 3.50 | 0 | H | 5.67 | 0.00 | 92.73 | 5.36 | 23.20 | 40.00 |
 | 165 | knee Pareto | 3.50 | 90 | E | 5.67 | 1.00 | 85.36 | 4.95 | 91.35 | 40.00 |
 

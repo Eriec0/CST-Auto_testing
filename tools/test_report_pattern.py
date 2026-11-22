@@ -64,6 +64,22 @@ def main():
     check("pola datar: HPBW tidak terdefinisi (None), bukan angka palsu", mi["hpbw"] is None)
     check("berkas rusak mengembalikan None", pt.read_cut(os.path.join(tmp, "tidak_ada.txt")) is None)
     check("VSWR dari S11: 0 dB mendekati batas, -9.54 dB sekitar 2", abs(float(pt.vswr_from_db(-9.5424)) - 2.0) < 0.01)
+    from cstopt.report import report as rp
+    class _D:                                                    # desain tiruan: rentang 0..10 untuk dua parameter
+        params = ["A", "B"]
+        lo = np.array([0.0, 0.0])
+        hi = np.array([10.0, 10.0])
+    row = pd.Series({"sample_id": 7, "A": 9.95, "B": 5.0})
+    bn = rp.bound_notes("R", row, "uji", _D())
+    check("bound_notes: A di batas atas (dalam 1 persen) ditandai, B tidak", len(bn) == 1 and "A = 9.950" in bn[0] and "batas atas" in bn[0], str(bn))
+    bn2 = rp.bound_notes("R", pd.Series({"sample_id": 8, "A": 0.05, "B": 5.0}), "uji", _D())
+    check("bound_notes: batas bawah ditandai", len(bn2) == 1 and "batas bawah" in bn2[0])
+    check("bound_notes: tanpa desain tidak galat", rp.bound_notes("R", row, "uji", None) == [])
+    pd.DataFrame({"sample_id": [1, 1, 2], "plan": ["oat", "semua", "semua"], "direncanakan": [3, 6, 6], "dilewati": [0, 0, 0], "belum_tersimulasi": [0, 0, 0],
+                  "tersimulasi": [3, 6, 5], "lulus": [3, 6, 2], "yield_pct": [100.0, 100.0, 40.0]}).to_csv(os.path.join(tmp, "tolerance_RUNX_yield.csv"), index=False)
+    ty = rp.tol_yields("RUNX", tmp)
+    check("tol_yields memakai baris plan 'semua' saja", ty == {1: (100.0, 6, 6), 2: (40.0, 2, 5)}, str(ty))
+    check("tol_yields: berkas tidak ada memberi {}", rp.tol_yields("RUN_TIDAK_ADA", tmp) == {})
     notes = []
     fn, rows = pt.fig_patterns("RUN_TIDAK_ADA", [(1, "x")], pd.DataFrame({"sample_id": [1], "fr_ghz": [3.5]}), tmp, notes)
     check("ff hilang: dilewati dengan catatan, tanpa galat", fn is None and rows == [] and notes and "tidak ada berkas ff" in notes[0], str(notes))
@@ -81,6 +97,14 @@ def main():
         check(f"{r}: bagian 1 sampai 9 ada", all(f"## {i}. " in md for i in range(1, 10)))
         other = [x for x in (ro, fr4) if x != r][0]
         check(f"{r}: tidak menyebut desain lain ({other})", re.search(re.escape(other) + r"(?![A-Za-z0-9_])", md) is None)
+        check(f"{r}: ada kalimat target bersamaan (BW dan gain)", "kedua target proposal" in md or "sekaligus:" in md)
+        tolf = os.path.join(out, f"tolerance_{r}_yield.csv")
+        has_tol = os.path.exists(tolf) or os.path.exists(os.path.join(paths.DATA_DIR, "_compare", f"tolerance_{r}_yield.csv"))
+        if has_tol:
+            check(f"{r}: desain rekomendasi tahan toleransi muncul di bagian 3 dan 4", "Desain rekomendasi" in md or "sehingga menjadi desain rekomendasi" in md)
+            check(f"{r}: yield desain BW tertinggi dicantumkan", "yield toleransi" in md)
+        else:
+            check(f"{r}: tanpa data toleransi: catatan desain rekomendasi tidak dibuat", "tidak ada data toleransi" in md)
         for nm in ("pattern", "vswr_eff", "phase"):
             check(f"{r}: gambar {nm} dibuat", os.path.exists(os.path.join(out, f"report_{nm}_{r}.png")))
         check(f"{r}: tabel metrik pola dan ringkasan ada", "HPBW (derajat)" in md and "directivity di fr (dBi)" in md)

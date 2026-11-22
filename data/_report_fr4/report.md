@@ -3,10 +3,10 @@
 ## 1. Informasi reproduksi
 
 - Tanggal: 2026-11-22
-- Commit git: f2a9792fc9a3d23c8a7b1b0786d8209c21d0ab1b
+- Commit git: e5c87d76651d9b2a19c48de80bcc70531d1ba519
 - Paket: Python 3.10.0, numpy 2.2.6, pandas 2.3.3, sklearn 1.7.2, scipy 1.15.3, matplotlib 3.10.9
 - Sampel per run: MicrostripAntena 156 sampel
-- Syarat dasar: fr 3.3 sampai 3.7 GHz dan RL minimum <= -10 dB; desain terbaik dipilih dengan memaksimalkan bw_mhz
+- Syarat dasar: fr 3.3 sampai 3.7 GHz dan RL minimum <= -10 dB; desain BW tertinggi dipilih dengan memaksimalkan bw_mhz; desain rekomendasi: bw_mhz tertinggi di antara desain dengan yield toleransi >= 90%
 
 ## 2. Definisi
 
@@ -20,7 +20,7 @@
 
 ### MicrostripAntena: skenario syarat dasar
 
-Desain terbaik: sampel 137 (52 sampel memenuhi syarat skenario ini).
+Desain dengan bw_mhz tertinggi: sampel 137 (52 sampel memenuhi syarat skenario ini); tanpa data toleransi.
 
 | besaran | target proposal | tercapai | selisih terhadap target | status |
 |---|---|---|---|---|
@@ -35,9 +35,11 @@ Desain terbaik: sampel 137 (52 sampel memenuhi syarat skenario ini).
 
 Maksimum terpisah pada skenario ini: BW 180.6 MHz (sampel 137, gain 2.80 dBi); gain 2.89 dBi (sampel 95, BW 126.2 MHz).
 
+Tidak ada sampel yang memenuhi BW >= 200 MHz dan gain >= 5 dBi sekaligus (kedua target proposal). Tidak ada sampel dengan gain >= 5 dBi pada skenario ini.
+
 ## 4. Parameter desain terbaik
 
-### MicrostripAntena: sampel 137 (skenario syarat dasar)
+### MicrostripAntena: sampel 137 (desain BW tertinggi, skenario syarat dasar)
 
 | parameter | nilai (mm) |
 |---|---|
@@ -102,6 +104,8 @@ Backtest BO vs acak (MicrostripAntena):
 
 - Front MicrostripAntena (BW) belum representatif: hanya 4 titik (minimal 6).
 - Front MicrostripAntena (cakupan pita) belum representatif: hanya 5 titik (minimal 6).
+- MicrostripAntena: tidak ada data toleransi (tolerance_MicrostripAntena_yield.csv); desain rekomendasi tidak dibuat. Jalankan tools/analyze_tolerance.py --run MicrostripAntena.
+- MicrostripAntena: sampel 137 (desain BW tertinggi): WD = 8.000 mm berada di batas atas rentang efektif (8.000 mm); optimum mungkin dibatasi rentang.
 - Sensitivitas ARD dan Sobol (MicrostripAntena): sensitivity.png belum ada di C:\Users\User\Playground\CST_Auto\data\MicrostripAntena\figures (jalankan train, validate, backtest, atau sensitivity).
 - MicrostripAntena: 2 sampel punya fr menempel di tepi sweep; resonansi sebenarnya mungkin di luar rentang sweep.
 
@@ -115,7 +119,7 @@ Bagian ini dibaca dari berkas yang sudah ada (`curves/`, `eff/`, `ff/`, `batch_l
 
 | sampel | peran | fr (GHz) | RL min (dB) | VSWR | BW (MHz) | cakupan pita (%) | directivity di fr (dBi) | gain di fr (dBi) | eta radiasi di fr | eta total di fr |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 137 | terbaik (syarat dasar) | 3.698 | -18.167 | 1.282 | 180.630 | 22.700 | 5.867 | 2.803 | 0.494 | 0.442 |
+| 137 | BW tertinggi (syarat dasar) | 3.698 | -18.167 | 1.282 | 180.630 | 22.700 | 5.867 | 2.803 | 0.494 | 0.442 |
 | 91 | knee Pareto | 3.522 | -29.482 | 1.069 | 134.750 | 33.400 | 6.126 | 2.836 | 0.461 | 0.439 |
 
 **Pola radiasi 2D (directivity)**
@@ -126,8 +130,8 @@ Bagian ini dibaca dari berkas yang sudah ada (`curves/`, `eff/`, `ff/`, `batch_l
 
 | sampel | peran | f (GHz) | phi | bidang | Dmax (dBi) | arah puncak (derajat) | HPBW (derajat) | F/B (dB) | XPD sektor HPBW (dB) | AR boresight (dB) |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 137 | terbaik (syarat dasar) | 3.75 | 0 | H | 5.86 | 0.00 | 102.65 | 6.84 | 22.10 | 40.00 |
-| 137 | terbaik (syarat dasar) | 3.75 | 90 | E | 5.87 | 2.00 | 90.76 | 9.38 | 95.12 | 40.00 |
+| 137 | BW tertinggi (syarat dasar) | 3.75 | 0 | H | 5.86 | 0.00 | 102.65 | 6.84 | 22.10 | 40.00 |
+| 137 | BW tertinggi (syarat dasar) | 3.75 | 90 | E | 5.87 | 2.00 | 90.76 | 9.38 | 95.12 | 40.00 |
 | 91 | knee Pareto | 3.50 | 0 | H | 6.12 | 0.00 | 96.61 | 7.84 | 23.17 | 40.00 |
 | 91 | knee Pareto | 3.50 | 90 | E | 6.13 | 2.00 | 93.62 | 10.06 | 71.95 | 40.00 |
 
