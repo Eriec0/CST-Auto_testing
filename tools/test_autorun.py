@@ -71,6 +71,34 @@ def main():
     a = ap.parse_args()
     tmp = tempfile.mkdtemp(prefix="autorun_")
     try:
+        print("0. bound_check (unit, tanpa CST)")
+        import types
+        import numpy as np
+        import pandas as pd
+        from cstopt import autorun as au
+        from cstopt.ml import core as mc
+
+        class _D:                                                  # desain tiruan: rentang 0 sampai 10 untuk A, B, C
+            params = ["A", "B", "C"]
+            lo = np.array([0.0, 0.0, 0.0])
+            hi = np.array([10.0, 10.0, 10.0])
+        dsp, csp = os.path.join(tmp, "ds.csv"), os.path.join(tmp, "cand.csv")
+        pd.DataFrame({"sample_id": [1, 2, 3], "A": [5.0, 9.99, 4.0], "B": [5.0, 5.0, 5.0], "C": [5.0, 5.0, 5.0]}).to_csv(dsp, index=False)
+        pd.DataFrame({"sample_id": [4, 5, 6], "A": [5.0, 5.0, 5.0], "B": [0.1, 0.15, 5.0], "C": [9.9, 5.0, 5.0]}).to_csv(csp, index=False)
+        s_fake = {"files": {"dataset": {"path": dsp}}, "best": {"sample_id": 2}}
+        ctx0 = types.SimpleNamespace(a=types.SimpleNamespace(design=None, bounds_frac=0.02))
+        real_ld, mc.load_design = mc.load_design, (lambda name=None: _D())
+        try:
+            h = au.bound_check(ctx0, s_fake, csp)
+            check("A menempel batas atas pada sampel terbaik, B batas bawah pada 2 dari 3 kandidat, C (1 dari 3) tidak",
+                  set(h) == {("A", "atas"), ("B", "bawah")}, str(h))
+            check("alasan memuat sampel terbaik dan jumlah kandidat", "sampel terbaik 2" in h[("A", "atas")][0] and "2 dari 3 kandidat" in h[("B", "bawah")][0], str(h))
+            check("tanpa sampel terbaik dan tanpa berkas kandidat: tidak ada temuan, tanpa galat",
+                  au.bound_check(ctx0, {"files": {"dataset": {"path": dsp}}, "best": None}, os.path.join(tmp, "tidak_ada.csv")) == {})
+            check("jarak 0,5 rentang: semua parameter dekat batas", len({p for p, _ in au.bound_check(types.SimpleNamespace(a=types.SimpleNamespace(design=None, bounds_frac=0.5)), s_fake, csp)}) == 3)
+        finally:
+            mc.load_design = real_ld
+
         print("1. dry-run")
         fresh()
         mock(["--samples", SAMPLES, "--limit", "12"])                     # 12 dari 20 sampel LHS disimulasikan, 8 menunggu
@@ -145,6 +173,24 @@ def main():
             check("log batch 4 dengan n_baru 5 (2 menunggu, lalu 3 baru) dari 1 yang sudah ada", len(lg) == log_ok + 1 and lg[-1]["batch"] == "4" and lg[-1]["n_baru"] == "5",
                   str(lg[-1:]))
             check("tanpa id ganda: total = awal + 1 + 5", len(ids()) == n0 + 6 and len(set(ids())) == n0 + 6, f"{len(ids())} baris, {len(set(ids()))} unik")
+        print("7. pemeriksaan menempel batas (--bounds-frac 1.0 memaksa temuan)")
+        n_log = len(rows(LOG))
+        r = autorun(["--batches", "2", "--run-script", MOCK, "--bounds-check", "warn", "--bounds-frac", "1.0"])
+        check("warn: selesai kode 0", r.returncode == 0, (r.stdout + r.stderr)[-300:])
+        check("warn: peringatan tiap batch (2) dan progres JSON step batas", r.stdout.count("PERINGATAN batas rentang") == 2 and '"step": "batas"' in r.stdout)
+        check("warn: dua batch dicatat", len(rows(LOG)) == n_log + 2)
+        n_log = len(rows(LOG))
+        r = autorun(["--batches", "3", "--run-script", MOCK, "--bounds-check", "stop", "--bounds-frac", "1.0"])
+        check("stop: kode 4 setelah batch pertama", r.returncode == 4, f"rc={r.returncode} " + r.stdout[-300:])
+        check("stop: pesan BERHENTI menyebut menempel batas dan hanya satu peringatan", "BERHENTI" in r.stdout and "menempel batas" in r.stdout and r.stdout.count("PERINGATAN batas rentang") == 1)
+        check("stop: batch yang memicu tetap dicatat (satu baris)", len(rows(LOG)) == n_log + 1)
+        n_log = len(rows(LOG))
+        r = autorun(["--batches", "1", "--run-script", MOCK, "--bounds-check", "stop", "--bounds-frac", "1.0"])
+        check("stop pada batch terakhir: tidak berhenti (kode 0) tetapi tetap memperingatkan", r.returncode == 0 and "PERINGATAN batas rentang" in r.stdout, f"rc={r.returncode}")
+        r = autorun(["--batches", "1", "--run-script", MOCK, "--bounds-check", "off", "--bounds-frac", "1.0"])
+        check("off: tanpa peringatan", r.returncode == 0 and "PERINGATAN" not in r.stdout and '"step": "batas"' not in r.stdout)
+        r = autorun(["--batches", "1", "--run-script", MOCK, "--bounds-frac", "0"])
+        check("--bounds-frac 0 ditolak (kode 2)", r.returncode == 2, f"rc={r.returncode}")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
         if not a.keep:

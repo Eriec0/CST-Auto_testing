@@ -5,6 +5,8 @@ Atribut opsional di file desain (bila tidak ada, nilai lama di export.py dan bat
   PARAM_NAMES        daftar nama parameter geometri (persis sama dengan parameter di macro CST)
   BASE_PARAMS        dict baseline parameter di model CST (dulu BASE di batch.py), dipakai untuk mengembalikan model setelah batch
   EXTRA_BASE         dict parameter ekstra yang boleh muncul di CSV beserta baselinenya (dulu BASE_EXTRA), mis. {"hs": 1.6, "Wf": 3.11}
+                     Bila tidak ada tetapi SUBSTRATE (er dan h) ada, baseline diturunkan darinya: hs = h dan Wf = lebar 50 ohm (cstopt/substrate.py),
+                     BUKAN nilai bawaan FR-4 (itu dulu membuat project RO4350B berubah menjadi hs 1,6 dan Wf 3,11 setelah run yang menyetel hs dan Wf).
   CST                dict opsional: band_ghz, rl_limit_db, f0_ghz, monitors_ghz (mulai, akhir, langkah), bw_min_mhz, gain_min_dbi
   geometry_problems  fungsi(p) -> daftar masalah; dipakai menggantikan check_geometry lama di batch.py
 Catatan: MON_* (monitors_ghz) harus SAMA dengan FF_F_START/STOP/STEP di macro CST.
@@ -13,6 +15,7 @@ import ntpath
 import os
 
 from cstopt import paths
+from cstopt import substrate
 from cstopt.cst import export as ed
 from cstopt.loader import load_design_module
 
@@ -61,9 +64,10 @@ def configure(design=None, batch_module=None):
         if getattr(m, "BASE_PARAMS", None):
             batch_module.BASE.clear()
             batch_module.BASE.update(m.BASE_PARAMS)
-        if getattr(m, "EXTRA_BASE", None):
+        eb = getattr(m, "EXTRA_BASE", None) or substrate.default_extra_base(getattr(m, "SUBSTRATE", None))
+        if eb:
             batch_module.BASE_EXTRA.clear()
-            batch_module.BASE_EXTRA.update(m.EXTRA_BASE)
+            batch_module.BASE_EXTRA.update(eb)
         if callable(getattr(m, "geometry_problems", None)):
             batch_module.check_geometry = m.geometry_problems            # satu sumber aturan, tidak ada duplikat
     return m

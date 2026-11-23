@@ -66,6 +66,14 @@ elif mode == "fail":
     p(batch=1, of=2, step="suggest")
     print("[autorun] BERHENTI: jumlah sampel tidak bertambah setelah simulasi (20 ke 20)", flush=True)
     sys.exit(3)
+elif mode == "bound":
+    p(batch=1, of=2, step="batas", params=["WD"])
+    p(step="selesai_semua", batches=2)
+    sys.exit(0)
+elif mode == "bound4":
+    p(batch=1, of=2, step="batas", params=["WD", "LI"])
+    print("[autorun] BERHENTI: parameter menempel batas rentang (LI, WD) setelah batch 1; lebarkan rentang", flush=True)
+    sys.exit(4)
 else:
     p(batch=1, of=2, step="simulasi", done=3, total=3)
     p(batch=1, of=2, step="selesai", n_sampel=25, n_feasible=4, nilai_terbaik=212.5)
@@ -96,6 +104,7 @@ def main():
     argv = captured[-1]
     check("bawaan: autorun --batches 5 --qc --train ... --", argv[:5] == ["autorun", "--batches", "5", "--qc", "--train"] and "--" in argv, str(argv))
     check("argumen setelah -- = argumen suggest tombol Suggest", argv[argv.index("--") + 1:] == a._suggest_argv()[1:], str(argv))
+    check("bawaan: --bounds-check warn (peringatkan)", argv[argv.index("--bounds-check") + 1] == "warn" and argv.index("--bounds-check") < argv.index("--"), str(argv))
     check("dialog estimasi: 5 x 5 + 0 = 125 menit", "(5 x 5 + 0) x 5 menit = 125 menit" in asked[-1], asked[-1][:200])
     check("setelah Mulai: kontrol terkunci, bendera aktif", a._auto_active and all_disabled(ws))
     check("bounds dikunci saat auto run", (a.open_bounds(), infos[-1] == "Auto run" and not getattr(a, "_bounds_dlg", None))[1])
@@ -112,12 +121,17 @@ def main():
     a.bo_margin.set("fr_ghz=0.08")
     a.bo_region_auto.set("6:0.15")
     a.cst_project.set("cst_projects/X.cst")
+    a.auto_bounds.set("hentikan")
     a.do_autorun()
     argv = captured[-1]
     sug = argv[argv.index("--") + 1:]
     check("opsi tab 5 ikut (focus, constraint, sweep, diversity, margin, region-auto, q)",
           all(x in sug for x in ("--focus", "bw", "--sweep", "--diversity", "0.4", "--margin", "--region-auto", "6:0.15")) and sug[sug.index("-q") + 1] == "3", str(sug))
     check("qc mati: tanpa --qc; --train ada; --project ada; 2 batch", "--qc" not in argv[:argv.index("--")] and "--train" in argv and argv[argv.index("--project") + 1] == "cst_projects/X.cst" and argv[2] == "2", str(argv))
+    a_off = cmd.autorun(1, bounds_check="off")
+    check("pilihan hentikan menjadi --bounds-check stop", argv[argv.index("--bounds-check") + 1] == "stop", str(argv))
+    check("commands.autorun: off diteruskan, tanpa nilai tidak ada opsi", a_off[a_off.index("--bounds-check") + 1] == "off" and "--bounds-check" not in cmd.autorun(1), str(a_off))
+    check("pemetaan pilihan GUI: peringatkan, hentikan, abaikan", gapp.BOUNDS_MODES == {"peringatkan": "warn", "hentikan": "stop", "abaikan": "off"})
     check("estimasi 2 x 3 = 6 sampel = 30 menit", "(2 x 3 + 0) x 5 menit = 30 menit" in asked[-1])
     a._auto_finish(0, False)
 
@@ -167,6 +181,7 @@ def main():
         open(fake + ".mode", "w").write(mode)
         a.bo_sweep.set("")
         a.bo_focus.set("otomatis")
+        a.auto_bounds.set("peringatkan")
         a.auto_n.set(2)
         a.do_autorun()
 
@@ -190,6 +205,17 @@ def main():
     done = pump(root, lambda: not a.runner.busy and not a._auto_active)
     check("selesai normal: label Selesai 2 batch", done and a.auto_msg.get() == "Selesai 2 batch", a.auto_msg.get())
     check("kontrol terbuka setelah selesai", none_disabled(ws, skip=(a.e_region, a.e_region_auto)))
+
+    start("bound")
+    done = pump(root, lambda: not a.runner.busy and not a._auto_active)
+    check("selesai dengan peringatan batas: label memuat Selesai 2 batch dan WD menempel batas rentang",
+          done and a.auto_msg.get().startswith("Selesai 2 batch") and "WD" in a.auto_msg.get() and "menempel batas rentang" in a.auto_msg.get(), a.auto_msg.get())
+    check("label progres batas diterjemahkan", cmd.autorun_text({"batch": 1, "of": 3, "step": "batas", "params": ["WD", "LI"]}) == "Batch 1/3: peringatan: WD, LI menempel batas rentang")
+
+    start("bound4")
+    done = pump(root, lambda: not a.runner.busy and not a._auto_active)
+    check("berhenti kode 4: label Berhenti (kode 4) dengan penyebab menempel batas", done and "Berhenti (kode 4)" in a.auto_msg.get() and "menempel batas" in a.auto_msg.get(), a.auto_msg.get())
+    check("kontrol terbuka setelah kode 4", none_disabled(ws, skip=(a.e_region, a.e_region_auto)))
 
     root.destroy()
     print("\n" + ("SEMUA LULUS" if not FAILS else f"{len(FAILS)} pemeriksaan GAGAL: {FAILS}"))

@@ -407,9 +407,20 @@ FR-4 kini 156 sampel, RO4350B 185 sampel dan pengumpulan data selesai).
 | F7 | `package_dataset` dan tag rilis `v1.0-fr4-ro4350b` | tidak | pengguna | F6, F8 |
 | F8 | Uji CST nyata (daftar periksa) | ya | pengguna | tidak ada |
 | F9 | Pemeriksaan menempel batas di autorun (opsional) | tidak | Claude | tidak ada |
-| F10 | Perbaikan skrip uji `test_gui_t2` (opsional) | tidak | Claude | tidak ada |
+| F10 | Perbaikan skrip uji `test_gui_t2` (DIBATALKAN pengguna, 22 November 2026) | tidak | tidak ada | tidak ada |
 | F11 | Fitur lanjutan: impedansi dan pola 3D (sebelum demonstrasi) | ya | Claude dan pengguna | F8 |
 | F12 | Demonstrasi pada desain antena lain | ya | pengguna dan Claude | F7, F11 |
+
+Status 22 November 2026 (paling baru): F9 selesai di sandbox (paketF9): `autorun --bounds-check warn|stop|off`, `--bounds-frac`, kotak pilihan `Batas rentang` di GUI; uji `tools/test_autorun.py` dan `tools/test_gui_autorun.py` lulus. F10 masih opsional dan menunggu.
+
+Status 22 November 2026 (sebelumnya): F6 dilewati (naskah mengikuti format kampus dan ditulis sendiri oleh pengguna). F7 siap di sisi kode (`package_dataset` menyertakan `_report_*` dan opsi `--with-ff`, uji `tools/test_package_dataset.py` lulus); yang tersisa untuk F7 adalah perintah di bawah setelah F8:
+```
+py main.py report --runs MicrostripAntena --out-dir data\_report_fr4
+py main.py report --runs MicrostripAntena_RO4350B --out-dir data\_report_ro4350b
+py tools\package_dataset.py --version v1.0-fr4-ro4350b --with-curves --with-ff
+git tag -a v1.0-fr4-ro4350b -m "rilis: FR-4 dan RO4350B"
+git push origin v1.0-fr4-ro4350b
+```
 
 Status 22 November 2026 (lanjutan): F4 dan F5 selesai (laporan RO4350B diperiksa; `deviasi_proposal.md` dan `ringkasan_dosen.md` diperbarui, paketF5). Berikutnya F6, F7, F8.
 
@@ -456,18 +467,51 @@ Prosa akademik tanpa tanda hubung dan em dash. Setiap angka bersumber dari tabel
 #### F7 Dataset dan rilis
 `py tools\package_dataset.py`, lalu tag `v1.0-fr4-ro4350b` setelah F8. Bila F8 tidak sempat, tag boleh dibuat tetapi catatan rilis harus jujur menyebut bahwa `run` belum diuji ulang di CST setelah refactor P1-1.
 
-#### F8 Uji CST nyata (daftar periksa pengguna, dengan catatan hasil di PROGRESS.md)
-1. `BASE_PARAMS` RO4350B terisi dan cocok dengan project CST.
-2. `py main.py run --check-samples`, lalu `py main.py run --limit 1`, lalu `py main.py export`.
-3. Autorun kecil: `py main.py autorun --batches 1 --qc --train --project <file.cst> -- -q 2`; periksa `auto_run_log.csv`.
-4. Hentikan di tengah simulasi (tombol Hentikan dan Ctrl+C), mulai ulang, pastikan tidak ada simulasi ganda dan tidak ada proses CST yatim.
-5. `py tools\test_gui_autorun.py` dan semua `test_gui_*` di Windows; catat yang gagal.
+#### F8 Uji CST nyata (daftar periksa pengguna; hasil dicatat di PROGRESS.md)
+
+Prinsip: semua uji ditulis ke folder TERPISAH supaya dataset laporan (`data\MicrostripAntena_RO4350B`, 185 sampel) tidak berubah. Dataset RO4350B tidak berasal dari LHS: ia dimulai dari 10 titik awal
+`data\MicrostripAntena_RO4350B\samples\seed_from_uslot_dgs_fr4.csv` (sampel 1 sampai 10, semuanya sudah ada di dataset). Karena itu `run` tanpa `--samples` akan gagal (tidak ada `lhs_samples.csv`); pakai berkas seed itu.
+Nama run uji `MicrostripAntena_RO4350B_uji` otomatis memakai desain `uslot_dgs_ro4350b` (awalan nama run diikuti garis bawah, seperti `_fine` dan `_tol`).
+
+A0. (DITAMBAHKAN 23 November 2026 setelah langkah A pertama tidak cocok). Percobaan pertama memberi fr 3,708 GHz (lama 3,724) dan BW 82,2 MHz (lama 71,06) pada project yang berisi hs 1,6 dan Wf 3,11 (nilai FR-4, impedansi saluran sekitar 54 ohm). Pasang `paketF8b`, lalu di CST setel parameter `hs` = 1.524 dan `Wf` = 3.336 (Wf 50 ohm untuk er 3,66; periksa `py tools\wf50.py --er 3.66 --h 1.524`), simpan project, dan ulangi langkah A ke folder `MicrostripAntena_RO4350B_uji2` (ganti `--run-name`). `run` sekarang mencetak `Substrat di project: hs = ..., Wf = ...` dan `[PERINGATAN]` bila berbeda dari desain; pastikan tanpa peringatan sebelum menjalankan. Cocok (HASIL: COCOK): data utama sah pada hs 1,524 dan project hanya berubah karena run toleransi 12 November (baseline salah di kode, sudah diperbaiki). Tidak cocok: periksa juga material di CST (er 3,66; tan delta 0,0037; apakah ketebalan substrat memakai parameter `hs`), lalu laporkan angkanya; pernyataan h 1,524 mm di laporan tidak boleh dipakai sebelum ini jelas. Setelah cocok, uji tiga desain laporan (165, 179, 180) lewat satu CSV dan `compare_runs.py`.
+
+A. Uji `run` (satu sampel ke folder terpisah; project RO4350B yang ada dibuka di CST):
+```
+$S = "data\MicrostripAntena_RO4350B\samples\seed_from_uslot_dgs_fr4.csv"
+$P = "C:\...\MicrostripAntena_RO4350B.cst"
+py main.py run --probe --project $P --run-name MicrostripAntena_RO4350B_uji
+py main.py run --check-samples --samples $S --run-name MicrostripAntena_RO4350B_uji
+py main.py run --test-set --project $P --run-name MicrostripAntena_RO4350B_uji
+py main.py run --test-export --project $P --run-name MicrostripAntena_RO4350B_uji
+py main.py run --samples $S --limit 1 --auto-yes --project $P --run-name MicrostripAntena_RO4350B_uji
+py tools\compare_runs.py MicrostripAntena_RO4350B MicrostripAntena_RO4350B_uji
+```
+Lulus bila: `--probe` melaporkan project dan keluaran `data\MicrostripAntena_RO4350B_uji`; `--check-samples` tidak menemukan masalah; satu sampel selesai (ada baris di `data\MicrostripAntena_RO4350B_uji\batch_lhs.csv`, kurva di `curves\`, berkas di `ff\` dan `eff\`);
+`compare_runs` mencetak HASIL: COCOK (simulasi ulang titik awal 1 mereproduksi fr 3,724 GHz dan BW 71,06 MHz dari data lama; ambang bawaan 2 MHz, 2 persen, 1 dB adalah konvensi). Bila tidak cocok, catat selisihnya dan JANGAN lanjut ke langkah B.
+
+B. Uji autorun (butuh salinan terpisah karena autorun menentukan folder run dari nama project dan desain):
+```
+Copy-Item "C:\...\MicrostripAntena_RO4350B.cst" "C:\...\MicrostripAntena_RO4350B_uji.cst"
+Copy-Item -Recurse data\MicrostripAntena_RO4350B data\MicrostripAntena_RO4350B_uji
+py tools\new_design.py ro4350b_uji --from uslot_dgs_ro4350b --run-name MicrostripAntena_RO4350B_uji
+# buka MicrostripAntena_RO4350B_uji.cst di CST, lalu:
+py main.py autorun --design ro4350b_uji --project "C:\...\MicrostripAntena_RO4350B_uji.cst" --batches 1 --qc --train -- -q 2
+```
+Lulus bila: dua sampel baru (dataset salinan 187 baris), `auto_run_log.csv` terbentuk dengan satu baris, tidak ada galat QC dan train. Kemudian uji Hentikan dari GUI (tab 5, desain `ro4350b_uji`, batch 2, q 2): tekan Hentikan saat simulasi berjalan,
+jalankan lagi, lalu periksa tidak ada id ganda: `py -c "import pandas as pd; d=pd.read_csv(r'data\MicrostripAntena_RO4350B_uji\batch_lhs.csv'); print(len(d), d.sample_id.is_unique)"`.
+Catat apakah proses CST tertinggal dan apakah dialog CST tertutup otomatis (`--auto-yes`).
+
+C. Uji GUI dan skrip di Windows: `py tools\test_gui_autorun.py`, `py tools\test_gui_report.py`, `py tools\test_gui_g1.py`, `py tools\test_autorun.py`, `py tools\test_report_pattern.py`, `py tools\smoke_test.py`;
+catat yang gagal (kegagalan lama yang sudah diketahui: `test_gui_t1` dan `test_gui_t2` bagian B).
+
+D. Bersihkan SEBELUM tag rilis: hapus `data\MicrostripAntena_RO4350B_uji`, `data\MicrostripAntena_RO4350B_uji` salinan, `designs\ro4350b_uji.py`, dan salinan project `_uji.cst` (beserta foldernya). Pastikan `git status` bersih dari berkas uji.
+`py main.py export` (CLI lama) tidak perlu diuji kecuali masih Anda pakai; `--test-export` sudah menguji ekspor farfield.
 
 #### F9 Pemeriksaan menempel batas di autorun (opsional, menunggu persetujuan)
 `--bounds-check warn|stop|off`. Di akhir tiap batch periksa sampel terbaik dan kandidat; bila sebuah parameter berada dalam 2% rentang dari batas pada sampel terbaik atau pada separuh kandidat atau lebih,
 tulis pesan dan (mode stop) berhenti dengan kode 4. Autorun TIDAK melebarkan sendiri; pelebaran lewat dialog Rentang parameter lalu lanjutkan. Hanya menyentuh `autorun.py` dan `gui/commands.py`; uji dengan `mock_run`.
 
-#### F10 Perbaikan skrip uji `test_gui_t2` (opsional)
+#### F10 Perbaikan skrip uji `test_gui_t2` (DIBATALKAN pengguna, 22 November 2026)
 Bagian B memakai `a.lhs_info.master` padahal `lhs_info` adalah StringVar. Ini galat di skrip uji, bukan di GUI.
 
 #### F11 Fitur lanjutan sebelum demonstrasi (BELUM dikerjakan; di luar pembekuan 24 November karena tidak mengubah inti BO)

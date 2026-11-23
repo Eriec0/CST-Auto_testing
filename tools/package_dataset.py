@@ -3,9 +3,10 @@ Kemas dataset untuk rilis (mis. unggah ke Zenodo untuk DOI). Tidak butuh CST.
 
   py tools/package_dataset.py --version v1.0-fr4-ro4350b
   py tools/package_dataset.py --version v1.0-fr4-ro4350b --with-curves
+  py tools/package_dataset.py --version v1.0-fr4-ro4350b --with-curves --with-ff
 
-Isi: batch_lhs.csv tiap run di data/ (kecuali folder yang diawali garis bawah), hasil di data/_compare (pareto_front.csv, ringkasan toleransi, report.md) bila ada,
-README_dataset.md (definisi kolom dan target, substrat per run), dan CHECKSUMS.sha256. Kurva S11 (folder curves/) hanya ikut dengan --with-curves karena besar.
+Isi: batch_lhs.csv tiap run di data/ (kecuali folder yang diawali garis bawah), hasil di data/_compare (pareto_front.csv, ringkasan toleransi, report.md) bila ada, laporan per desain di data/_report_* (report.md, gambar, csv) bila ada,
+README_dataset.md (definisi kolom dan target, substrat per run), dan CHECKSUMS.sha256. Kurva S11 (folder curves/) hanya ikut dengan --with-curves, dan data pola radiasi serta efisiensi (folder ff/ dan eff/, dibutuhkan untuk mereproduksi bagian 9 laporan) hanya dengan --with-ff, karena besar.
 Keluaran: release/<version>/ dan release/<version>.zip. Lisensi sengaja dibiarkan kosong untuk diisi penulis sebelum diunggah.
 """
 import argparse
@@ -61,6 +62,7 @@ def main():
     ap = argparse.ArgumentParser(description="Kemas dataset untuk rilis")
     ap.add_argument("--version", required=True, help="mis. v1.0-fr4-ro4350b")
     ap.add_argument("--with-curves", action="store_true", help="ikut sertakan folder curves/ tiap run")
+    ap.add_argument("--with-ff", action="store_true", help="ikut sertakan folder ff/ (directivity irisan bidang utama) dan eff/ (efisiensi) tiap run")
     ap.add_argument("--out-dir", default=os.path.join(ROOT, "release"))
     a = ap.parse_args()
 
@@ -88,6 +90,11 @@ def main():
         if a.with_curves and os.path.isdir(os.path.join(rd, "curves")):
             shutil.copytree(os.path.join(rd, "curves"), os.path.join(out, "curves"))
             items += [os.path.join("data", run, "curves", f) for f in sorted(os.listdir(os.path.join(rd, "curves")))]
+        if a.with_ff:
+            for sub_dir in ("ff", "eff"):
+                sd = os.path.join(rd, sub_dir)
+                if os.path.isdir(sd):
+                    shutil.copytree(sd, os.path.join(out, sub_dir))
         df = pd.read_csv(src)
         dname, sub, params = substrate_of(run)
         readme_runs.append((run, len(df), dname, sub, [c for c in params if c in df.columns]))
@@ -99,6 +106,14 @@ def main():
         for f in keep:
             shutil.copyfile(os.path.join(cmp_dir, f), os.path.join(dest, "data", "_compare", f))
             items.append(os.path.join("data", "_compare", f))
+    for d in sorted(os.listdir(paths.DATA_DIR)):          # laporan per desain (py main.py report --runs RUN --out-dir data/_report_RUN)
+        rp = os.path.join(paths.DATA_DIR, d)
+        if d.startswith("_report_") and os.path.isdir(rp):
+            keep = [f for f in sorted(os.listdir(rp)) if f.endswith((".md", ".png", ".csv"))]
+            if keep:
+                os.makedirs(os.path.join(dest, "data", d), exist_ok=True)
+            for f in keep:
+                shutil.copyfile(os.path.join(rp, f), os.path.join(dest, "data", d, f))
     if not readme_runs:
         raise SystemExit("Tidak ada run dengan batch_lhs.csv di data/.")
 
@@ -113,7 +128,10 @@ def main():
     md += [f"| {k} | {v} |" for k, v in COLS.items()]
     md += ["", "Kolom lain (mis. eta_tot, vswr, gain_real_dbi, feasible_all) mengikuti `cstopt/cst/export.py` di repositori kode.",
            "Run berakhiran `_tol` adalah skenario toleransi fabrikasi (sample_id = ID desain * 100 + k; berkas `*_meta.csv` di `samples/` memberi plan dan skenarionya),",
-           "`_fine` adalah simulasi ulang dengan mesh lebih halus, dan `_pilot_h` adalah pilot ketebalan substrat.", "",
+           "`_fine` adalah simulasi ulang dengan mesh lebih halus, dan `_pilot_h` adalah pilot ketebalan substrat.",
+           "Folder `data/_report_<run>/` (bila ada) berisi laporan otomatis per desain (`report.md` dan gambarnya); `data/_compare/` berisi versi gabungan dan tabel toleransi.",
+           "Berkas `ff/` (bila disertakan) berisi DIRECTIVITY (dBi), bukan gain, untuk irisan phi = 0 dan phi = 90 pada frekuensi monitor; satu berkas adalah irisan penuh:",
+           "Theta 0 sampai 180 pada Phi irisan lalu Theta 179 sampai 1 pada Phi + 180. Berkas `eff/` berisi efisiensi radiasi dan total terhadap frekuensi.", "",
            "## Berkas dan checksum", "", "Lihat `CHECKSUMS.sha256` (SHA256 tiap berkas)."]
     with open(os.path.join(dest, "README_dataset.md"), "w", encoding="utf-8") as f:
         f.write("\n".join(md) + "\n")

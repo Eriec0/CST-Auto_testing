@@ -16,7 +16,10 @@ Urutan satu batch:
   (f) train (opsional, --train)
   (g) catat satu baris ke data/<RUN>/auto_run_log.csv
 
-Berhenti bila: langkah gagal (kode 1), jumlah sampel tidak bertambah setelah simulasi (kode 3), atau Ctrl+C (kode 130).
+Berhenti bila: langkah gagal (kode 1), jumlah sampel tidak bertambah setelah simulasi (kode 3), parameter menempel batas rentang dengan
+--bounds-check stop (kode 4, setelah batch itu dicatat; tidak dipakai pada batch terakhir), atau Ctrl+C (kode 130).
+Pemeriksaan batas (--bounds-check warn|stop|off, bawaan warn): di akhir tiap batch, sebuah parameter dianggap menempel batas bila nilainya pada sampel terbaik,
+atau pada separuh kandidat batch itu atau lebih, berada dalam --bounds-frac (bawaan 0,02) rentang efektif dari batas. Autorun TIDAK melebarkan rentang sendiri.
 `run` melewati sampel yang sudah ada, jadi aman dihentikan lalu dimulai ulang: sampel yang menunggu diselesaikan di
 langkah (a) batch berikutnya tanpa simulasi ganda. Nomor batch di log kumulatif; --batches N = N batch baru per pemanggilan.
 
@@ -25,6 +28,7 @@ Keluaran untuk GUI: baris `[autorun] {json}` (batch, of, step, done, total); bar
 import argparse
 import csv
 import json
+import math
 import os
 import queue
 import signal
@@ -38,7 +42,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MAIN = os.path.join(ROOT, "main.py")
 LOG_NAME = "auto_run_log.csv"
 LOG_COLS = ["batch", "waktu", "n_sampel", "n_feasible", "nilai_terbaik", "id_terbaik", "n_baru", "durasi_detik"]
-EXIT_FAIL, EXIT_NOGROW, EXIT_INT = 1, 3, 130
+EXIT_FAIL, EXIT_NOGROW, EXIT_BOUND, EXIT_INT = 1, 3, 4, 130
 _CUR = [None]                                   # anak proses yang sedang berjalan (untuk dimatikan saat Ctrl+C)
 
 
@@ -163,6 +167,40 @@ def simulate(ctx, samples, n_expected, label):
     say(f"simulasi selesai: sampel {n_before} ke {n_after}")
 
 
+def bound_check(ctx, s, cand_path):
+    """{(parameter, 'atas'|'bawah'): [alasan]} untuk parameter yang menempel batas rentang efektif pada sampel terbaik atau pada separuh kandidat batch ini atau lebih."""
+    try:
+        import pandas as pd
+        from cstopt.ml import core as mc
+        d = mc.load_design(ctx.a.design)
+        frac = ctx.a.bounds_frac
+        df = pd.read_csv(s["files"]["dataset"]["path"])
+        bid = (s.get("best") or {}).get("sample_id")
+        row = df[df["sample_id"] == bid].iloc[0] if bid is not None and (df["sample_id"] == bid).any() else None
+        cand = pd.read_csv(cand_path) if os.path.exists(cand_path) else None
+        hits = {}
+        for p, lo, hi in zip(d.params, d.lo, d.hi):
+            rng = float(hi - lo)
+            if not rng > 0:
+                continue
+
+            def side(v):
+                return "atas" if v >= hi - frac * rng else ("bawah" if v <= lo + frac * rng else None)
+            if row is not None and p in row.index:
+                sd = side(float(row[p]))
+                if sd:
+                    hits.setdefault((p, sd), []).append(f"sampel terbaik {int(bid)} = {float(row[p]):.3f}")
+            if cand is not None and p in cand.columns and len(cand):
+                for sd in ("atas", "bawah"):
+                    n = sum(1 for v in cand[p] if side(float(v)) == sd)
+                    if n >= max(1, math.ceil(len(cand) / 2)):
+                        hits.setdefault((p, sd), []).append(f"{n} dari {len(cand)} kandidat batch ini")
+        return hits
+    except Exception as e:                              # noqa: BLE001  (pemeriksaan tambahan tidak boleh menghentikan autorun)
+        say(f"pemeriksaan batas dilewati ({type(e).__name__}: {e})")
+        return {}
+
+
 def one_batch(ctx):
     t0 = time.time()
     s = summary(ctx.a.design)
@@ -207,6 +245,17 @@ def one_batch(ctx):
              nilai_terbaik=row["nilai_terbaik"])
     say(f"batch {ctx.i}/{ctx.n} selesai: {row['n_sampel']} sampel ({row['n_baru']} baru), feasible {row['n_feasible']}, "
         f"terbaik {row['nilai_terbaik']} (id {row['id_terbaik']}); dicatat di {os.path.join(s['run_dir'], LOG_NAME)}")
+    if ctx.a.bounds_check != "off":
+        hits = bound_check(ctx, s, cand_path)
+        if hits:
+            names = sorted({p for p, _ in hits})
+            detail = "; ".join(f"{p} di batas {sd} ({', '.join(why)})" for (p, sd), why in sorted(hits.items()))
+            progress(batch=ctx.i, of=ctx.n, step="batas", params=names)
+            say(f"PERINGATAN batas rentang: {detail}. Optimum mungkin dibatasi rentang; pertimbangkan melebarkan lewat `py main.py bounds` "
+                "atau dialog Rentang parameter, lalu lanjutkan.")
+            if ctx.a.bounds_check == "stop" and ctx.i < ctx.n:
+                raise Stop(EXIT_BOUND, f"parameter menempel batas rentang ({', '.join(names)}) setelah batch {ctx.k}; lebarkan rentang lalu jalankan autorun lagi, "
+                                       "atau pakai --bounds-check warn")
 
 
 # ---------------------------------------------------------------- log
@@ -263,6 +312,9 @@ def build_parser():
     ap.add_argument("--train-restarts", type=int, default=2, help="restarts untuk train pemantauan (bawaan 2)")
     ap.add_argument("--min-per-sample", type=float, default=5.0, help="perkiraan menit per sampel, hanya untuk estimasi")
     ap.add_argument("--dry-run", action="store_true", help="cetak rencana dan estimasi waktu, tanpa menjalankan apa pun")
+    ap.add_argument("--bounds-check", choices=("warn", "stop", "off"), default="warn",
+                    help="pemeriksaan parameter menempel batas rentang di akhir tiap batch: warn (bawaan), stop (kode 4), off")
+    ap.add_argument("--bounds-frac", type=float, default=0.02, help="jarak ke batas (pecahan rentang efektif) yang dianggap menempel; bawaan 0,02")
     ap.add_argument("--run-script", default=None, help=argparse.SUPPRESS)      # uji: pakai tools/mock_run.py sebagai pengganti run
     ap.add_argument("--poll", type=float, default=20.0, help=argparse.SUPPRESS)  # detik antar pembaruan progres simulasi
     return ap
@@ -276,6 +328,8 @@ def main():
         sug = sug[1:]
     if a.batches < 1 or a.batches > 999:
         ap.error("--batches harus 1 sampai 999")
+    if not 0.0 < a.bounds_frac <= 1.0:
+        ap.error("--bounds-frac harus lebih dari 0 dan paling besar 1")
     if "--report" in sug:
         ap.error("--report bukan opsi untuk autorun (suggest --report tidak membuat kandidat)")
     if "--design" in sug:
@@ -295,7 +349,7 @@ def main():
     pend = s.get("pending_lhs", 0) + s.get("pending_bo", 0)
     mins = (a.batches * q + pend) * a.min_per_sample
     say(f"desain {s['design']} (run {s['run']}), {s.get('n_samples', 0)} sampel, menunggu LHS {s.get('pending_lhs', 0)} dan BO {s.get('pending_bo', 0)}")
-    say(f"rencana: {a.batches} batch x q {q}; suggest: {' '.join(sug) or '(bawaan)'}; qc {'ya' if a.qc else 'tidak'}; train {'ya' if a.train else 'tidak'}")
+    say(f"rencana: {a.batches} batch x q {q}; suggest: {' '.join(sug) or '(bawaan)'}; qc {'ya' if a.qc else 'tidak'}; train {'ya' if a.train else 'tidak'}; periksa batas rentang: {a.bounds_check}")
     say(f"estimasi simulasi: ({a.batches} x {q} + {pend} menunggu) x {a.min_per_sample:g} menit = {mins:.0f} menit "
         f"(sekitar {mins / 60:.1f} jam), belum termasuk suggest, qc, train")
     if a.dry_run:

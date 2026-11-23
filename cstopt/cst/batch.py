@@ -47,6 +47,7 @@ import cst.interface
 import cst.results
 
 from cstopt import paths
+from cstopt import substrate
 from cstopt.cst import export as ed
 from cstopt.cst.farfield import peak_over_files
 from cstopt.loader import default_run_name
@@ -179,6 +180,21 @@ def set_params(m3d, params):
     if bad:
         raise RuntimeError(f"Parameter tidak sesuai setelah diset (diminta, terbaca): {bad}")
     print("  parameter terverifikasi (dibaca balik dari CST).")
+
+
+def check_substrate(m3d, design_mod):
+    """Cetak hs dan Wf di project CST dan peringatan bila berbeda dari substrat desain (mis. nilai FR-4 tertinggal setelah run toleransi). Tidak pernah menghentikan run."""
+    sub = getattr(design_mod, "SUBSTRATE", None)
+    if not sub:
+        return
+    try:
+        hs, wf = float(m3d.RestoreDoubleParameter("hs")), float(m3d.RestoreDoubleParameter("Wf"))
+    except Exception as e:                                # noqa: BLE001  (project tanpa parameter hs atau Wf)
+        print(f"  [info] hs dan Wf tidak terbaca dari project ({_short_err(e)}); pemeriksaan substrat dilewati.")
+        return
+    print(f"Substrat di project: hs = {hs:g} mm, Wf = {wf:g} mm (desain: {sub.get('material', '?')}, er {sub.get('er')}, h {sub.get('h')} mm)")
+    for w in substrate.check_values(sub, hs, wf):
+        print("  [PERINGATAN] " + w)
 
 
 def _short_err(e):
@@ -459,6 +475,7 @@ def main():
     args.samples = args.samples or os.path.join(rd, "samples", "lhs_samples.csv")
     detect_extras(args.samples)
     print(f"Project : {project}\nKeluaran: {rd}")
+    check_substrate(m3d, design_mod)
     if args.probe:
         return 0
     os.makedirs(os.path.join(rd, "curves"), exist_ok=True)

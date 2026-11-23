@@ -144,7 +144,7 @@ def bounds(design=None, propose=False, apply=False, set_=None, reset=False, wide
     return _design(a, design)
 
 
-def autorun(batches, qc=False, train=False, design=None, project=None, suggest_argv=None):
+def autorun(batches, qc=False, train=False, design=None, project=None, suggest_argv=None, bounds_check=None):
     """Perintah `autorun`. suggest_argv = hasil suggest(...) (diteruskan apa adanya ke `suggest` setelah `--`)."""
     a = ["autorun", "--batches", str(int(batches))]
     if qc:
@@ -155,6 +155,8 @@ def autorun(batches, qc=False, train=False, design=None, project=None, suggest_a
         a += ["--design", design]
     if project:
         a += ["--project", project]
+    if bounds_check:
+        a += ["--bounds-check", bounds_check]
     sug = list(suggest_argv or [])
     if sug and sug[0] == "suggest":
         sug = sug[1:]
@@ -184,6 +186,8 @@ def autorun_text(d):
         return f"{pre}selesai: {d.get('n_sampel')} sampel, {d.get('n_feasible')} feasible{best}"
     if step == "selesai_semua":
         return f"Selesai {d.get('batches')} batch"
+    if step == "batas":
+        return f"{pre}peringatan: {', '.join(d.get('params', []))} menempel batas rentang"
     if step == "berhenti":
         return f"Berhenti (kode {d.get('kode')})"
     return ""

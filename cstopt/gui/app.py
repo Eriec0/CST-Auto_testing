@@ -38,6 +38,7 @@ CST_OK = sys.platform == "win32" and importlib.util.find_spec("cst") is not None
 R2_TARGET = 0.85
 LOG_MAX_LINES = 4000
 REPORT_SCOPES = ("Desain terpilih", "Semua desain (gabungan)")
+BOUNDS_MODES = {"peringatkan": "warn", "hentikan": "stop", "abaikan": "off"}   # auto run: tindakan bila parameter menempel batas rentang
 
 
 def _descendants(w):
@@ -91,6 +92,7 @@ class App:
         self._zoom_path = None
         self._user_stopped = False
         self._auto_active, self._auto_last = False, ""      # auto run: sedang berjalan; pesan berhenti terakhir dari CLI
+        self._auto_hit = set()                              # auto run: parameter yang dilaporkan menempel batas
         self.status_detail = False                   # G4a: status ringkas (2 baris) atau detail
         self._status_full, self._status_compact = [], []
         self._log_open = False
@@ -484,6 +486,7 @@ class App:
         self.auto_qc = tk.BooleanVar(value=True)
         self.auto_train = tk.BooleanVar(value=True)
         self.auto_msg = tk.StringVar(value="")
+        self.auto_bounds = tk.StringVar(value="peringatkan")
         auto = ttk.Frame(t)
         auto.grid(row=2, column=0, sticky="ew", pady=(8, 0))
         arow = ttk.Frame(auto)
@@ -492,6 +495,8 @@ class App:
         ttk.Spinbox(arow, from_=1, to=99, textvariable=self.auto_n, width=4).pack(side="left", padx=(4, 12))
         ttk.Checkbutton(arow, text="QC", variable=self.auto_qc).pack(side="left", padx=(0, 12))
         ttk.Checkbutton(arow, text="Latih GPR", variable=self.auto_train).pack(side="left", padx=(0, 12))
+        ttk.Label(arow, text="Batas rentang").pack(side="left")
+        ttk.Combobox(arow, textvariable=self.auto_bounds, values=list(BOUNDS_MODES), state="readonly", width=11).pack(side="left", padx=(4, 12))
         self.auto_btn = ttk.Button(arow, text="Mulai auto run", command=self.do_autorun)
         self.auto_btn.pack(side="left")
         self.buttons.append(self.auto_btn)
@@ -1048,15 +1053,16 @@ class App:
         pend = int(st.get("pending_lhs", 0) or 0) + int(st.get("pending_bo", 0) or 0)
         mins = cmd.autorun_minutes(n, q, pend)
         argv = cmd.autorun(n, self.auto_qc.get(), self.auto_train.get(), self.design(), self.cst_project.get().strip() or None,
-                           self._suggest_argv())
+                           self._suggest_argv(), bounds_check=BOUNDS_MODES.get(self.auto_bounds.get(), "warn"))
         text = (f"Auto run {n} batch, {q} kandidat per batch, sampel menunggu {pend}.\n\n"
                 f"Estimasi simulasi: ({n} x {q} + {pend}) x 5 menit = {mins:.0f} menit (sekitar {mins / 60:.1f} jam), "
                 f"belum termasuk suggest, QC, dan latih GPR.\n\n"
+                f"Bila parameter menempel batas rentang: {self.auto_bounds.get()} (autorun tidak melebarkan rentang sendiri).\n\n"
                 "Semua opsi tab 5 dibaca sekarang lalu dikunci sampai selesai. Hentikan kapan saja; sampel yang sudah "
                 "disimulasikan dilewati saat dilanjutkan.\n\nMulai?")
         if not messagebox.askokcancel("Mulai auto run", text):
             return
-        self._auto_active, self._auto_last = True, ""
+        self._auto_active, self._auto_last, self._auto_hit = True, "", set()
         self._lock_bo(True)
         self.auto_msg.set(f"Batch 1/{n}: memulai ...")
         self.run_cmd(argv)
@@ -1067,6 +1073,8 @@ class App:
         except ValueError:
             return False
         txt = cmd.autorun_text(d)
+        if d.get("step") == "batas":
+            self._auto_hit.update(d.get("params", []))
         if txt:
             self.auto_msg.set(txt)
             self.state_var.set("Auto run: " + txt)
@@ -1080,7 +1088,8 @@ class App:
         if stopped or rc == 130:
             self.auto_msg.set("Dihentikan. Jalankan lagi untuk melanjutkan; sampel yang sudah ada dilewati.")
         elif rc == 0:
-            self.auto_msg.set(self.auto_msg.get() if self.auto_msg.get().startswith("Selesai") else "Selesai.")
+            base = self.auto_msg.get() if self.auto_msg.get().startswith("Selesai") else "Selesai."
+            self.auto_msg.set(base + (f" Peringatan: {', '.join(sorted(self._auto_hit))} menempel batas rentang (lihat log)." if self._auto_hit else ""))
         else:
             self.auto_msg.set(f"Berhenti (kode {rc}). " + (self._auto_last or "Lihat log."))
 
