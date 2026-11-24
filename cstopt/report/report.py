@@ -36,7 +36,10 @@ from cstopt.ml import core as mc                          # noqa: E402
 from cstopt.report import pareto as pr                    # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-FOCUS_COL = {"bw": "bw_mhz", "cover": "band_cover_pct", "gain": "gain_fr_ieee_dbi"}
+FOCUS_COL = {"bw": "bw_mhz", "cover": "band_cover_pct", "gain": "gain_fr_ieee_dbi", "rl": "rl_depth_db"}
+# rl_depth_db = -rl_min_db (kolom turunan, makin besar makin baik): fokus RL memilih desain dengan S11 minimum paling dalam (paling negatif) di antara sampel fisibel.
+FOCUS_NAME = {"bw": "BW tertinggi", "cover": "cakupan pita tertinggi", "gain": "gain tertinggi", "rl": "RL terdalam"}
+OBJ_LABEL = {"rl_depth_db": "kedalaman RL = -rl_min_db (dB)"}
 T_BW, T_GAIN = 200.0, 5.0          # target proposal
 NEED = ["sample_id", "fr_ghz", "rl_min_db", "bw_mhz", "gain_fr_ieee_dbi"]
 
@@ -60,13 +63,19 @@ def versions():
 
 
 def design_for_run(run):
+    """Nama file desain untuk sebuah run: RUN_NAME sama persis, atau awalan terpanjang yang diikuti garis bawah (mis. _fine, _tol, _uji); sama dengan
+    cstopt.loader.module_for_run. Tanpa ini run turunan jatuh ke desain bawaan dan memakai pita antena lain."""
+    best, best_len = None, -1
     for name in paths.list_designs():
         try:
-            if load_design_module(name).RUN_NAME == run:
-                return name
+            rn = load_design_module(name).RUN_NAME
         except Exception:
             continue
-    return None
+        if rn == run:
+            return name
+        if rn and run.startswith(rn + "_") and len(rn) > best_len:
+            best, best_len = name, len(rn)
+    return best
 
 
 def parse_scenarios(items, runs):
@@ -147,6 +156,9 @@ def main():
     os.makedirs(args.out_dir, exist_ok=True)
     designs = {r: design_for_run(r) for r in runs}
     d0 = mc.load_design(next((v for v in designs.values() if v), None))
+    global T_BW, T_GAIN                                  # target dari file desain pertama (CST["bw_min_mhz"], CST["gain_min_dbi"]); bawaan 200 MHz dan 5 dBi
+    cst0 = getattr(getattr(d0, "mod", None), "CST", None) or {}
+    T_BW, T_GAIN = float(cst0.get("bw_min_mhz", T_BW)), float(cst0.get("gain_min_dbi", T_GAIN))
     band = tuple(args.band) if args.band else tuple(d0.band or load_design_module().BAND_GHZ)
     rl = args.rl_limit
     scen = parse_scenarios(args.constraint, runs)
@@ -159,6 +171,8 @@ def main():
             notes.append(f"Run {r}: batch_lhs.csv tidak ada, dilewati.")
             continue
         df = pd.read_csv(p).sort_values("sample_id").reset_index(drop=True)
+        if "rl_min_db" in df.columns:
+            df["rl_depth_db"] = -df["rl_min_db"]
         miss = [c for c in NEED + [obj] if c not in df.columns]
         if miss:
             notes.append(f"Run {r}: kolom hilang {miss}, dilewati.")
@@ -201,7 +215,7 @@ def main():
     seen = set()
     for (r, label), (b, _, _) in best.items():
         dd = mc.load_design(designs[r]) if designs.get(r) else None
-        for role, row in (("desain BW tertinggi", b), ("desain rekomendasi", rec.get((r, label)))):
+        for role, row in ((f"desain {FOCUS_NAME[args.focus]}", b), ("desain rekomendasi", rec.get((r, label)))):
             if row is not None and (r, int(row.sample_id)) not in seen:
                 seen.add((r, int(row.sample_id)))
                 notes += bound_notes(r, row, role, dd)
@@ -212,13 +226,14 @@ def main():
            f"- Commit git: {git_hash()}",
            f"- Paket: {versions()}",
            "- Sampel per run: " + "; ".join(f"{r} {len(data[r])} sampel" for r in runs),
-           f"- Syarat dasar: fr {band[0]:g} sampai {band[1]:g} GHz dan RL minimum <= {rl:g} dB; desain BW tertinggi dipilih dengan memaksimalkan {obj}; desain rekomendasi: {obj} tertinggi di antara desain dengan yield toleransi >= {args.min_yield:g}%", ""]
+           f"- Syarat dasar: fr {band[0]:g} sampai {band[1]:g} GHz dan RL minimum <= {rl:g} dB; desain {FOCUS_NAME[args.focus]} dipilih dengan memaksimalkan {OBJ_LABEL.get(obj, obj)}; desain rekomendasi: {FOCUS_NAME[args.focus]} di antara desain dengan yield toleransi >= {args.min_yield:g}%", ""]
     md += ["## 2. Definisi", "",
            "- BW: lebar pita S11 <= -10 dB di sekitar minimum global (BW = 0 bila RL minimum > -10 dB).",
            f"- Cakupan pita: persentase frekuensi di {band[0]:g} sampai {band[1]:g} GHz dengan S11 <= -10 dB.",
            "- Gain: gain IEEE di frekuensi resonansi (D + 10 log eta).",
            "- Substrat: nilai epsilon dan tan delta di bawah berasal dari file desain; konfirmasikan dengan material library CST.",
-           f"- Target proposal: fr {band[0]:g} sampai {band[1]:g} GHz, RL minimum <= {rl:g} dB, BW >= {T_BW:g} MHz, gain >= {T_GAIN:g} dBi.", ""]
+           f"- Target proposal: fr {band[0]:g} sampai {band[1]:g} GHz, RL minimum <= {rl:g} dB, BW >= {T_BW:g} MHz, gain >= {T_GAIN:g} dBi.",
+           "- RL minimum: nilai S11 terendah (dB) pada sapuan frekuensi; makin negatif makin baik. Fokus rl memilih desain fisibel dengan RL minimum paling negatif (kedalaman RL = -rl_min_db)."] + [""]
 
     def target_table(b):
         bw, g, fr_, rlm = float(b.bw_mhz), float(b.gain_fr_ieee_dbi), float(b.fr_ghz), float(b.rl_min_db)
@@ -247,13 +262,15 @@ def main():
         if b is None:
             md += [f"Tidak ada sampel yang memenuhi syarat ({label}).", ""]
             continue
-        md += [f"Desain dengan {obj} tertinggi: sampel {int(b.sample_id)} ({n_ok} sampel memenuhi syarat skenario ini); {yield_text(r, b.sample_id)}.", ""]
+        md += [f"Desain dengan {FOCUS_NAME[args.focus]}: sampel {int(b.sample_id)} ({n_ok} sampel memenuhi syarat skenario ini); {yield_text(r, b.sample_id)}.", ""]
         md += target_table(b) + [""]
         df = data[r]
         okb = feasible(df, band, rl, cons)
         if okb.any():
             ib = df.loc[okb, "bw_mhz"].idxmax()
             ig = df.loc[okb, "gain_fr_ieee_dbi"].idxmax()
+            ir = df.loc[okb, "rl_min_db"].idxmin()
+            md += [f"RL terdalam pada skenario ini: {df.rl_min_db[ir]:.1f} dB (sampel {int(df.sample_id[ir])}, fr {df.fr_ghz[ir]:.3f} GHz, BW {df.bw_mhz[ir]:.1f} MHz, gain {df.gain_fr_ieee_dbi[ir]:.2f} dBi).", ""]
             md += [f"Maksimum terpisah pada skenario ini: BW {df.bw_mhz[ib]:.1f} MHz (sampel {int(df.sample_id[ib])}, gain {df.gain_fr_ieee_dbi[ib]:.2f} dBi); "
                    f"gain {df.gain_fr_ieee_dbi[ig]:.2f} dBi (sampel {int(df.sample_id[ig])}, BW {df.bw_mhz[ig]:.1f} MHz).", ""]
             both = okb & (df.bw_mhz >= T_BW) & (df.gain_fr_ieee_dbi >= T_GAIN)
@@ -286,7 +303,7 @@ def main():
         dd = mc.load_design(dn) if dn else None
         params = list(dd.params) if dd else [c for c in data[r].columns if c in ("Lp", "Wp", "LU", "WU", "gU", "PU", "LI", "LD", "WD", "gD", "PD")]
         extra = [c for c in ("hs", "Wf") if c in data[r].columns]
-        picks = [("desain BW tertinggi", b)]
+        picks = [(f"desain {FOCUS_NAME[args.focus]}", b)]
         rc = rec.get((r, label))
         if rc is not None and int(rc.sample_id) != int(b.sample_id):
             picks.append(("desain rekomendasi tahan toleransi", rc))
@@ -385,7 +402,7 @@ def main():
             ax.axvline(n0 + 0.5, color="gray", ls="--", lw=0.8)
         ax.set_title(r, fontsize=10)
         ax.set_xlabel("sample_id")
-        ax.set_ylabel(f"{obj} terbaik (feasible)")
+        ax.set_ylabel(f"{OBJ_LABEL.get(obj, obj)} terbaik (feasible)")
         ax.grid(alpha=0.3)
         ax.legend(fontsize=7)
     fig.suptitle("Konvergensi (garis putus abu abu = akhir sampel awal)", fontsize=10)
@@ -414,7 +431,7 @@ def main():
     md9 = []
     try:
         from cstopt.report import pattern as pt
-        md9 = pt.build(runs, data, designs, best, front_all, args.out_dir, band, rl, obj, obj, mc, notes, rec=rec)
+        md9 = pt.build(runs, data, designs, best, front_all, args.out_dir, band, rl, obj, OBJ_LABEL.get(obj, obj), mc, notes, rec=rec, focus_name=FOCUS_NAME[args.focus])
     except Exception as e:                              # noqa: BLE001
         notes.append(f"Bagian 9 gagal dibuat ({type(e).__name__}: {e}); bagian 1 sampai 8 tetap valid.")
     md += ["## 8. Catatan otomatis", ""]

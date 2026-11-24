@@ -78,6 +78,7 @@ Rasio depan belakang rendah (3,1 sampai 5,4 dB) dengan directivity di arah belak
 - Kesimpulan bahwa batas FR-4 berasal dari rugi substrat (bagian 2) didukung pilot h dan kontrol tan delta pada geometri tetap. Tetapi pencarian FR-4 sendiri berhenti di batas WD 8 mm, sehingga efek pelebaran lebih lanjut tidak diuji; kesimpulan itu sebaiknya ditulis sebagai bukti kuat, bukan bukti tunggal.
 - Satu seed dan satu putaran per substrat; perbandingan FR-4 dan RO4350B tidak setara (156 dan 185 sampel, rentang berubah di tengah pengumpulan, syarat gain berbeda), sehingga hypervolume antar substrat hanya acuan kasar.
 - Gain diukur di fr, bukan di seluruh pita; pola radiasi hanya dua irisan bidang utama pada 3,5 GHz.
+- Substrat project CST RO4350B. Setelah run toleransi 12 November, project RO4350B sempat berisi hs 1,6 mm dan Wf 3,11 mm (impedansi saluran sekitar 54 ohm) karena baseline bawaan kode memakai nilai FR-4; ini diperbaiki pada 23 November. Data utama dikumpulkan pada hs 1,524 mm dan Wf 3,336 mm: simulasi ulang titik awal 1 pada nilai itu mereproduksi hasil lama persis (selisih 0,0 pada fr, BW, RL, dan gain), sedangkan pada hs 1,6 dan Wf 3,11 fr titik itu bergeser minus 16 MHz. Data toleransi menyetel hs dan Wf sendiri sehingga tidak terpengaruh.
 - Tidak ada pembanding surrogate atau optimizer lain karena di luar lingkup proposal (surrogate GPR dengan BO).
 
 ## 7. Kontribusi yang bisa diklaim

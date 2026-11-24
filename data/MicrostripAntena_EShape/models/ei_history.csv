@@ -1,0 +1,2 @@
+waktu,n_sampel,sinyal,ei_maks,f_terbaik,rasio
+2026-11-24 13:05:33,60,fokus_match|min rl_band_min_db|fr_ghz>=2.4;fr_ghz<=2.6;d_peak_fr_dbi>=4;s11_at_f0_db<=-15,26.033413700358395,23.9904,1.0851596347021473

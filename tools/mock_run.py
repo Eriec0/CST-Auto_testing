@@ -60,7 +60,7 @@ def read_samples(path, extras_allowed):
 
 def make_collector(mod):
     """Pasang pengganti sumber data CST di modul export, lalu kembalikan fungsi simulate(sid, params) -> (row, curves)."""
-    f = np.round(np.arange(SWEEP[0], SWEEP[1] + 1e-9, SWEEP[2]), 6)
+    f = np.round(np.arange(ed.MON_START, ed.MON_STOP + 1e-9, SWEEP[2]), 6)       # rentang = monitor desain (desain lama: 2,5 sampai 4,5)
     state = {}
 
     def eff_curve(res, path, run_id):

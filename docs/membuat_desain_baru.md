@@ -73,3 +73,8 @@ py main.py run --design nama_desain --check-samples     # validasi CSV sampel (g
 - Fitur turunan kurva untuk antena multi resonansi mungkin butuh hook `features` sendiri; fitur S11 bawaan mengambil dip terdekat ke pita.
 - `qc` dan `curves` memakai `--run-name`; `qc` juga menerima `--design`. Konstanta pemeriksaan efisiensi (`--expect-eff`, `--mon-step`) bernilai bawaan FR-4 (9 titik, langkah 0,25 GHz); ubah bila rentang monitor berbeda.
 - Nama parameter yang dipakai GUI untuk tabel kandidat (Lp, Wp, LU, WU, WD) hanya preferensi; bila tidak ada, GUI menampilkan 8 kolom pertama.
+
+## Contoh lengkap
+
+Antena kedua dengan geometri berbeda (patch FR-4 berbentuk E, pita 2,4 sampai 2,6 GHz): `designs/eshape_fr4.py` dan `macros/eshape_fr4.bas`; prosedur demonstrasi lewat GUI di `docs/demonstrasi_gui.md`.
+Uji kesesuaian macro dan desain tanpa CST: `py tools\test_demo_design.py` (dapat dijadikan acuan untuk desain baru Anda: nama parameter, nilai awal, hs dan Wf, rentang frekuensi dan monitor, serta ambang aturan geometri harus sama di macro dan file desain).

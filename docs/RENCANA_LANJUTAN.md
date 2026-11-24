@@ -411,7 +411,13 @@ FR-4 kini 156 sampel, RO4350B 185 sampel dan pengumpulan data selesai).
 | F11 | Fitur lanjutan: impedansi dan pola 3D (sebelum demonstrasi) | ya | Claude dan pengguna | F8 |
 | F12 | Demonstrasi pada desain antena lain | ya | pengguna dan Claude | F7, F11 |
 
-Status 22 November 2026 (paling baru): F9 selesai di sandbox (paketF9): `autorun --bounds-check warn|stop|off`, `--bounds-frac`, kotak pilihan `Batas rentang` di GUI; uji `tools/test_autorun.py` dan `tools/test_gui_autorun.py` lulus. F10 masih opsional dan menunggu.
+Status 24 November 2026 (terbaru): perbaikan konstanta tertanam antena pertama (curves, Pareto, report, log) setelah demonstrasi dijalankan pengguna; `N_INITIAL` desain E-patch 60; uji `tools/test_demo_flow.py` (paketHardcode). Pembekuan fitur hari ini: tidak ada fitur baru, hanya perbaikan galat.
+
+Status 23 November 2026 (pesan dosen): kriteria desain bagus = RL. `report --focus rl` dan tab 6 pilihan rl ditambahkan; demonstrasi memakai fokus BO `match`; lihat PROGRESS dan `docs/demonstrasi_gui.md` (paketDemo2).
+
+Status 23 November 2026 (sebelumnya): F8 langkah A0 COCOK (hs 1,524 dan Wf 3,336 mereproduksi data utama persis; project sempat berubah ke nilai FR-4 karena bug baseline, diperbaiki di paketF8b). F12 siap di sisi alat (paketDemo): desain `eshape_fr4`, macro `macros/eshape_fr4.bas`, prosedur GUI di `docs/demonstrasi_gui.md`; belum dijalankan di CST. F11 dan fitur tambahan ditunda sampai riset selesai (keputusan pengguna).
+
+Status 22 November 2026 (sebelumnya): F9 selesai di sandbox (paketF9): `autorun --bounds-check warn|stop|off`, `--bounds-frac`, kotak pilihan `Batas rentang` di GUI; uji `tools/test_autorun.py` dan `tools/test_gui_autorun.py` lulus. F10 masih opsional dan menunggu.
 
 Status 22 November 2026 (sebelumnya): F6 dilewati (naskah mengikuti format kampus dan ditulis sendiri oleh pengguna). F7 siap di sisi kode (`package_dataset` menyertakan `_report_*` dan opsi `--with-ff`, uji `tools/test_package_dataset.py` lulus); yang tersisa untuk F7 adalah perintah di bawah setelah F8:
 ```

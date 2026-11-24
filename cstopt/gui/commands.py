@@ -193,10 +193,12 @@ def autorun_text(d):
     return ""
 
 
-def pareto(runs=None, all_points=False):
+def pareto(runs=None, all_points=False, out=None):
     a = ["pareto"]
     if runs:
         a += ["--runs", *runs]
+    if out:
+        a += ["--out", out]
     if all_points:
         a.append("--all")
     return a

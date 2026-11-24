@@ -22,7 +22,7 @@ import numpy as np                        # noqa: E402
 import pandas as pd                       # noqa: E402
 
 from cstopt import paths                  # noqa: E402
-from cstopt.loader import load_design_module   # noqa: E402
+from cstopt.loader import load_design_module, module_for_run   # noqa: E402
 
 NEED = ["sample_id", "fr_ghz", "rl_min_db", "bw_mhz", "gain_fr_ieee_dbi"]
 OPT = ["band_cover_pct", "eta_rad_fr", "d_peak_fr_dbi"]
@@ -126,14 +126,19 @@ def main():
     args = ap.parse_args()
     ref = (float(args.ref[0]), float(args.ref[1]))
 
-    band = tuple(args.band) if args.band else tuple(load_design_module().BAND_GHZ)
     runs = args.runs or default_runs()
     if not runs:
         sys.exit("Tidak ada run dengan batch_lhs.csv. Jalankan simulasi dulu atau sebutkan --runs.")
+    mod0 = module_for_run(runs[0])                         # pita dan garis target dari file desain run pertama (bukan desain bawaan)
+    cst0 = getattr(mod0, "CST", None) or {}
+    band = tuple(args.band) if args.band else tuple(getattr(mod0, "BAND_GHZ", (3.3, 3.7)))
+    band_of = {r: (tuple(args.band) if args.band else tuple(getattr(module_for_run(r), "BAND_GHZ", band))) for r in runs}
+    t_bw, t_gain = float(cst0.get("bw_min_mhz", 200.0)), float(cst0.get("gain_min_dbi", 5.0))
     out_png = args.out or os.path.join(paths.DATA_DIR, "_compare", "pareto.png")
     os.makedirs(os.path.dirname(out_png), exist_ok=True)
 
     data, fronts = {}, []
+    print(f"Target (file desain run pertama): BW >= {t_bw:g} MHz, gain >= {t_gain:g} dBi")
     print(f"Pita fr {band[0]} sampai {band[1]} GHz, RL minimum <= {args.rl_limit:g} dB"
           + (f", D >= {args.min_d:g} dBi" if args.min_d is not None else ""))
     for run in runs:
@@ -146,7 +151,7 @@ def main():
         if miss:
             print(f"[lewati] {run}: kolom hilang {miss}")
             continue
-        ok = df.fr_ghz.between(*band) & (df.rl_min_db <= args.rl_limit)
+        ok = df.fr_ghz.between(*band_of[run]) & (df.rl_min_db <= args.rl_limit)
         if args.min_d is not None and "d_peak_fr_dbi" in df.columns:
             ok &= df.d_peak_fr_dbi >= args.min_d
         data[run] = (df, ok)
@@ -154,7 +159,7 @@ def main():
     if not data:
         sys.exit("Tidak ada data yang bisa diplot.")
 
-    panels = [("bw_mhz", "BW (MHz)", 200.0, "MHz")]
+    panels = [("bw_mhz", "BW (MHz)", t_bw, "MHz")]
     if any("band_cover_pct" in df.columns for df, _ in data.values()):
         panels.append(("band_cover_pct", f"cakupan pita {band[0]:g} sampai {band[1]:g} GHz (%)", None, "%"))
     fig, axes = plt.subplots(1, len(panels), figsize=(6.2 * len(panels), 5.2), squeeze=False)
@@ -186,14 +191,14 @@ def main():
                 warns.append((run, xc, why))
             if xc == "bw_mhz":
                 fronts.append(fr.assign(run=run))
-        ax.axhline(5.0, color="red", ls="--", lw=1)
+        ax.axhline(t_gain, color="red", ls="--", lw=1)
         if xt:
             ax.axvline(xt, color="red", ls="--", lw=1)
         ax.set_xlabel(xl)
         ax.set_ylabel("gain di fr (dBi)")
         ax.grid(alpha=0.3)
         ax.legend(fontsize=8, loc="best")
-    fig.suptitle("Trade-off BW dan gain (garis merah = target proposal)")
+    fig.suptitle(f"Trade-off BW dan gain (garis merah = target dari file desain: BW {t_bw:g} MHz, gain {t_gain:g} dBi)")
     fig.tight_layout()
     fig.savefig(out_png, dpi=130)
     plt.close(fig)

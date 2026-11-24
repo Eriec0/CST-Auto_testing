@@ -105,6 +105,17 @@ def main():
             check(f"{r}: yield desain BW tertinggi dicantumkan", "yield toleransi" in md)
         else:
             check(f"{r}: tanpa data toleransi: catatan desain rekomendasi tidak dibuat", "tidak ada data toleransi" in md)
+        # fokus rl: desain terpilih = RL minimum paling negatif di antara sampel fisibel (fr di pita dan RL <= -10 dB)
+        out_rl = os.path.join(tmp, "rl_" + r)
+        res_rl = subprocess.run([sys.executable, os.path.join(ROOT, "main.py"), "report", "--runs", r, "--focus", "rl", "--out-dir", out_rl], cwd=ROOT, capture_output=True, text=True, timeout=900)
+        check(f"{r}: report --focus rl kode 0", res_rl.returncode == 0, (res_rl.stdout + res_rl.stderr)[-300:])
+        md_rl = open(os.path.join(out_rl, "report.md"), encoding="utf-8").read() if os.path.exists(os.path.join(out_rl, "report.md")) else ""
+        dfr = pd.read_csv(os.path.join(paths.run_dir(r), "batch_lhs.csv"))
+        okr = dfr.fr_ghz.between(3.3, 3.7) & (dfr.rl_min_db <= -10)
+        want = int(dfr.loc[dfr.loc[okr, "rl_min_db"].idxmin(), "sample_id"])
+        mm = re.search(r"Desain dengan RL terdalam: sampel (\d+)", md_rl)
+        check(f"{r}: fokus rl memilih sampel dengan RL minimum paling negatif ({want})", mm is not None and int(mm.group(1)) == want, str(mm.group(0) if mm else None))
+        check(f"{r}: fokus rl menulis RL terdalam dan definisinya", "RL terdalam pada skenario ini" in md_rl and "kedalaman RL" in md_rl)
         for nm in ("pattern", "vswr_eff", "phase"):
             check(f"{r}: gambar {nm} dibuat", os.path.exists(os.path.join(out, f"report_{nm}_{r}.png")))
         check(f"{r}: tabel metrik pola dan ringkasan ada", "HPBW (derajat)" in md and "directivity di fr (dBi)" in md)

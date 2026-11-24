@@ -558,7 +558,7 @@ class App:
         ttk.Label(row_b, text="Laporan untuk").pack(side="left")
         ttk.Combobox(row_b, textvariable=self.rep_scope, values=REPORT_SCOPES, state="readonly", width=22).pack(side="left", padx=(4, 10))
         ttk.Label(row_b, text="fokus").pack(side="left")
-        ttk.Combobox(row_b, textvariable=self.rep_focus, values=["", "bw", "cover", "gain"], state="readonly", width=7).pack(side="left", padx=(4, 10))
+        ttk.Combobox(row_b, textvariable=self.rep_focus, values=["", "bw", "cover", "gain", "rl"], state="readonly", width=7).pack(side="left", padx=(4, 10))
         ttk.Label(row_b, text="constraint (pisahkan dengan ;)").pack(side="left")
         ttk.Entry(row_b, textvariable=self.rep_constraint, width=46).pack(side="left", padx=(4, 8))
         b = ttk.Button(row_b, text="Buat laporan", command=self.do_make_report)
@@ -1154,7 +1154,12 @@ class App:
         self.run_cmd(self._suggest_argv(report=True), after=lambda: self.show_figure("bo_convergence.png"))
 
     def do_pareto(self):
-        self.run_cmd(cmd.pareto(), after=lambda: self.show_path(os.path.join(paths.DATA_DIR, "_compare", "pareto.png")))
+        runs, out = self._report_target()                    # sama dengan tombol Laporan: desain terpilih (data/_report_<run>) atau gabungan (data/_compare)
+        if out is None:
+            messagebox.showwarning("Pareto", "Run desain belum diketahui (status belum dimuat). Tekan Muat ulang status, atau pilih Semua desain (gabungan).")
+            return
+        png = os.path.join(out, "pareto.png")
+        self.run_cmd(cmd.pareto(runs, out=(png if runs else None)), after=lambda: self.show_path(png))
 
     def do_backtest(self):
         self.run_cmd(cmd.backtest(design=self.design()), after=lambda: self.show_figure("bo_backtest.png"))

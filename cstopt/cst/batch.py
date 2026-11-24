@@ -561,7 +561,7 @@ def main():
 
                 print(f"  fr={row['fr_ghz']} GHz | RL={row['rl_min_db']} dB | BW={row['bw_mhz']} MHz | "
                       f"monitor fr={row['f_mon_fr_ghz']} GHz")
-                print(f"  D(3,5)={row['d_peak_dbi']} dBi | D(fr)={row['d_peak_fr_dbi']} dBi | "
+                print(f"  D({ed.F0_GHZ:g})={row['d_peak_dbi']} dBi | D(fr)={row['d_peak_fr_dbi']} dBi | "
                       f"eta_rad(fr)={row['eta_rad_fr']} | gain(fr,IEEE)={row['gain_fr_ieee_dbi']} dBi")
                 if row["n_eff_points"] < len(ed.MONITORS_GHZ):
                     print(f"  [peringatan] kurva efisiensi hanya {row['n_eff_points']} titik "

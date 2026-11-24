@@ -130,12 +130,12 @@ def f_(v, dp=2):
 
 
 # ---------------------------------------------------------------- pemilihan desain
-def pick_designs(run, best, front_all, rec=None):
+def pick_designs(run, best, front_all, rec=None, focus_name="BW tertinggi"):
     """[(sample_id, peran)] : desain BW tertinggi skenario pertama, desain rekomendasi tahan toleransi (bila ada), dan titik knee front Pareto."""
     out = []
     for (r, label), (b, _, _) in best.items():
         if r == run and b is not None:
-            out.append([int(b.sample_id), f"BW tertinggi ({label})"])
+            out.append([int(b.sample_id), f"{focus_name} ({label})"])
             rc = (rec or {}).get((r, label))
             if rc is not None:
                 sid = int(rc.sample_id)
@@ -326,7 +326,7 @@ def tolerance_tables(run, out_dir):
 
 
 # ---------------------------------------------------------------- pintu masuk
-def build(runs, data, designs_by_run, best, front_all, out_dir, band, rl, obj, ylabel, mc, notes, rec=None):
+def build(runs, data, designs_by_run, best, front_all, out_dir, band, rl, obj, ylabel, mc, notes, rec=None, focus_name="BW tertinggi"):
     """Kembalikan (baris markdown bagian 9, jumlah). Catatan tambahan ditambahkan ke `notes`."""
     md = ["## 9. Pola radiasi, metrik tambahan, dan fase optimasi", "",
           "Bagian ini dibaca dari berkas yang sudah ada (`curves/`, `eff/`, `ff/`, `batch_lhs.csv`). Pola yang tersimpan adalah DIRECTIVITY (dBi) "
@@ -336,7 +336,7 @@ def build(runs, data, designs_by_run, best, front_all, out_dir, band, rl, obj, y
         df = data[run]
         dn = designs_by_run.get(run)
         dd = mc.load_design(dn) if dn else None
-        sel = pick_designs(run, best, front_all, rec)
+        sel = pick_designs(run, best, front_all, rec, focus_name)
         md += [f"### 9.{runs.index(run) + 1} {run}", ""]
         if not sel:
             md += ["Tidak ada desain fisibel untuk dipilih; bagian ini dilewati.", ""]

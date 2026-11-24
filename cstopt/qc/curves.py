@@ -14,7 +14,7 @@ import os
 import sys
 
 from cstopt import paths
-from cstopt.loader import default_run_name
+from cstopt.loader import default_run_name, module_for_run
 
 import numpy as np
 import pandas as pd
@@ -24,12 +24,24 @@ import pandas as pd
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--run-name", default=None, help="default: RUN_NAME desain bawaan")
-    ap.add_argument("--f0", type=float, default=3.5)
-    ap.add_argument("--band", type=float, nargs=2, default=(3.3, 3.7))
-    ap.add_argument("--limit", type=float, default=-10.0)
+    ap.add_argument("--design", default=None, help="file desain untuk f0, pita, dan batas RL (bawaan: dicocokkan dari nama run)")
+    ap.add_argument("--f0", type=float, default=None, help="GHz; bawaan: CST[\"f0_ghz\"] desain")
+    ap.add_argument("--band", type=float, nargs=2, default=None, help="GHz; bawaan: BAND_GHZ desain")
+    ap.add_argument("--limit", type=float, default=None, help="dB; bawaan: CST[\"rl_limit_db\"] desain, atau -10")
     args = ap.parse_args()
 
-    rd = paths.run_dir(args.run_name or default_run_name())
+    run = args.run_name or default_run_name()
+    mod = module_for_run(run, args.design)                 # f0, pita, dan batas RL harus sama dengan yang dipakai saat ekspor (dari file desain)
+    cst_cfg = getattr(mod, "CST", None) or {}
+    if args.f0 is None:
+        args.f0 = float(cst_cfg.get("f0_ghz", 3.5))
+    if args.band is None:
+        args.band = tuple(getattr(mod, "BAND_GHZ", (3.3, 3.7)))
+    if args.limit is None:
+        args.limit = float(cst_cfg.get("rl_limit_db", -10.0))
+    print(f"Desain {getattr(mod, 'NAME', '?')}: f0 {args.f0:g} GHz, pita {args.band[0]:g} sampai {args.band[1]:g} GHz, batas RL {args.limit:g} dB")
+
+    rd = paths.run_dir(run)
     csv_path = os.path.join(rd, "batch_lhs.csv")
     cdir = os.path.join(rd, "curves")
     if not os.path.exists(csv_path) or not os.path.isdir(cdir):

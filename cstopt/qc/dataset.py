@@ -32,11 +32,23 @@ def main():
     ap.add_argument("--design", default=None, help="nama file di designs/ (default: dicocokkan dari --run-name, lalu desain bawaan)")
     ap.add_argument("--run-name", default=None, help="default: RUN_NAME desain")
     ap.add_argument("--samples", default=None, help="default: data/<run>/samples/lhs_samples.csv")
-    ap.add_argument("--expect-eff", type=int, default=9, help="jumlah titik kurva efisiensi (jumlah monitor)")
-    ap.add_argument("--mon-step", type=float, default=0.25)
+    ap.add_argument("--expect-eff", type=int, default=None, help="jumlah titik kurva efisiensi (jumlah monitor); bawaan: dari CST[\"monitors_ghz\"] desain, atau 9")
+    ap.add_argument("--mon-step", type=float, default=None, help="langkah monitor (GHz); bawaan: dari CST[\"monitors_ghz\"] desain, atau 0,25")
     args = ap.parse_args()
 
     mod = module_for_run(args.run_name, args.design)
+    cst_cfg = getattr(mod, "CST", None) or {}
+    mon = tuple(cst_cfg.get("monitors_ghz", (2.5, 4.5, 0.25)))                     # (awal, akhir, langkah) GHz
+    f0 = float(cst_cfg.get("f0_ghz", 3.5))
+    n_mon = int((mon[1] - mon[0]) / mon[2] + 0.5) + 1
+    if not any(abs(mon[0] + i * mon[2] - f0) < 1e-6 for i in range(n_mon)):
+        n_mon += 1                                                                   # macro selalu membuat monitor utama di f0
+    if args.expect_eff is None:
+        args.expect_eff = n_mon
+    if args.mon_step is None:
+        args.mon_step = float(mon[2])
+    band = tuple(getattr(mod, "BAND_GHZ", (3.3, 3.7)))
+    bw_min = float(cst_cfg.get("bw_min_mhz", 200.0))
     run = args.run_name or mod.RUN_NAME
     PARAMS = list(mod.PARAM_NAMES)                  # parameter geometri dari file desain (bukan lagi 11 nama FR-4 tetap)
     rd = paths.run_dir(run)
@@ -107,7 +119,7 @@ def main():
             problems.append(f"monitor terpilih bukan yang terdekat dengan fr pada sampel: {far[:15]}")
     if "fr_edge_flag" in df.columns and df.fr_edge_flag.sum():
         notes.append(f"{int(df.fr_edge_flag.sum())} sampel punya fr menempel di tepi sweep "
-                     f"(id {df.sample_id[df.fr_edge_flag == 1].tolist()[:12]}): resonansi sebenarnya mungkin di luar 2,5-4,5 GHz")
+                     f"(id {df.sample_id[df.fr_edge_flag == 1].tolist()[:12]}): resonansi sebenarnya mungkin di luar {mon[0]:g}-{mon[1]:g} GHz")
 
     print("\n== HASIL PEMERIKSAAN ==")
     if problems:
@@ -122,11 +134,11 @@ def main():
     if {"fr_ghz", "rl_min_db", "bw_mhz"} <= set(df.columns):
         fr = df.fr_ghz
         print("\n== RINGKASAN SEBARAN ==")
-        edges = [2.5, 2.9, 3.3, 3.7, 4.1, 4.6]
+        edges = list(np.linspace(mon[0], mon[1], 6))
         h, _ = np.histogram(fr, edges)
         print("  fr: " + " | ".join(f"{a:.1f}-{b:.1f}: {c}" for a, b, c in zip(edges[:-1], edges[1:], h)))
-        print(f"  fr di 3,3-3,7 GHz: {int(((fr >= 3.3) & (fr <= 3.7)).sum())} | RL <= -10 dB: {int((df.rl_min_db <= -10).sum())}"
-              f" | BW > 0: {int((df.bw_mhz > 0).sum())} | BW maks: {df.bw_mhz.max():.0f} MHz | BW >= 200: {int((df.bw_mhz >= 200).sum())}")
+        print(f"  fr di {band[0]:g}-{band[1]:g} GHz: {int(((fr >= band[0]) & (fr <= band[1])).sum())} | RL <= -10 dB: {int((df.rl_min_db <= -10).sum())}"
+              f" | BW > 0: {int((df.bw_mhz > 0).sum())} | BW maks: {df.bw_mhz.max():.0f} MHz | BW >= {bw_min:g}: {int((df.bw_mhz >= bw_min).sum())}")
         if "gain_fr_ieee_dbi" in df.columns:
             g = df.gain_fr_ieee_dbi
             print(f"  gain di fr (IEEE): median {g.median():.2f}, maks {g.max():.2f} dBi | >= 3 dBi: {int((g >= 3).sum())} | >= 5 dBi: {int((g >= 5).sum())}")

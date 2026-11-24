@@ -54,6 +54,21 @@ def main():
     argv = captured[-1]
     check("fokus dan dua constraint ikut", argv[argv.index("--focus") + 1] == "gain" and argv.count("--constraint") == 2, str(argv))
 
+    a.rep_scope.set(gapp.REPORT_SCOPES[0])
+    a.do_pareto()
+    argv = captured[-1]
+    check("Pareto desain terpilih: --runs RunContoh dan --out data/_report_RunContoh/pareto.png",
+          argv[0] == "pareto" and argv[argv.index("--runs") + 1] == "RunContoh" and argv[argv.index("--out") + 1] == os.path.join(paths.DATA_DIR, "_report_RunContoh", "pareto.png"), str(argv))
+    a.rep_scope.set(gapp.REPORT_SCOPES[1])
+    a.do_pareto()
+    argv = captured[-1]
+    check("Pareto gabungan: tanpa --runs dan tanpa --out", argv == ["pareto"], str(argv))
+    a.rep_scope.set(gapp.REPORT_SCOPES[0])
+    a.rep_focus.set("rl")
+    a.do_make_report()
+    argv = captured[-1]
+    check("fokus rl diteruskan ke report (--focus rl)", argv[argv.index("--focus") + 1] == "rl", str(argv))
+    a.rep_focus.set("")
     n = len(captured)
     a.status = {}
     a.do_make_report()
