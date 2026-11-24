@@ -1,2 +1,6 @@
 waktu,n_sampel,sinyal,ei_maks,f_terbaik,rasio
 2026-11-24 13:05:33,60,fokus_match|min rl_band_min_db|fr_ghz>=2.4;fr_ghz<=2.6;d_peak_fr_dbi>=4;s11_at_f0_db<=-15,26.033413700358395,23.9904,1.0851596347021473
+2026-11-24 13:58:32,63,fokus_match|min rl_band_min_db|fr_ghz>=2.4;fr_ghz<=2.6;d_peak_fr_dbi>=4;s11_at_f0_db<=-15,1.5963805403379627,44.5084,0.0358669496171051
+2026-11-24 14:10:59,66,fokus_match|min rl_band_min_db|fr_ghz>=2.4;fr_ghz<=2.6;d_peak_fr_dbi>=4;s11_at_f0_db<=-15,5.711774063397616,44.5084,0.1283302491978506
+2026-11-24 14:59:59,69,fokus_match|min rl_band_min_db|fr_ghz>=2.4;fr_ghz<=2.6;d_peak_fr_dbi>=4;s11_at_f0_db<=-15,0.0314142462388223,44.5084,0.0007058048871409
+2026-11-24 15:12:03,72,fokus_match|min rl_band_min_db|fr_ghz>=2.4;fr_ghz<=2.6;d_peak_fr_dbi>=4;s11_at_f0_db<=-15,0.011760898481182086,44.5084,0.0002642399745032867

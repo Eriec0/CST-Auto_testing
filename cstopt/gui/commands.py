@@ -15,20 +15,20 @@ def lhs(n, seed, report=False, design=None):
     return _design(a, design)
 
 
-def run_probe(project=None):
-    return ["run", "--probe"] + (["--project", project] if project else [])
+def run_probe(project=None, design=None):
+    return _design(["run", "--probe"] + (["--project", project] if project else []), design)
 
 
-def run_check(samples=None, project=None):
+def run_check(samples=None, project=None, design=None):
     a = ["run", "--check-samples"]
     if samples:
         a += ["--samples", samples]
     if project:
         a += ["--project", project]
-    return a
+    return _design(a, design)
 
 
-def run_batch(samples=None, auto_yes=True, limit=0, project=None):
+def run_batch(samples=None, auto_yes=True, limit=0, project=None, design=None):
     a = ["run"]
     if samples:
         a += ["--samples", samples]
@@ -38,7 +38,7 @@ def run_batch(samples=None, auto_yes=True, limit=0, project=None):
         a += ["--limit", str(int(limit))]
     if project:
         a += ["--project", project]
-    return a
+    return _design(a, design)
 
 
 def qc(run=None):

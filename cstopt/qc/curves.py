@@ -30,7 +30,7 @@ def main():
     ap.add_argument("--limit", type=float, default=None, help="dB; bawaan: CST[\"rl_limit_db\"] desain, atau -10")
     args = ap.parse_args()
 
-    run = args.run_name or default_run_name()
+    run = args.run_name or default_run_name(args.design)       # folder data mengikuti --design, bukan desain bawaan
     mod = module_for_run(run, args.design)                 # f0, pita, dan batas RL harus sama dengan yang dipakai saat ekspor (dari file desain)
     cst_cfg = getattr(mod, "CST", None) or {}
     if args.f0 is None:

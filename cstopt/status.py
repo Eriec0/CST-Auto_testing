@@ -87,7 +87,7 @@ def summary(design=None):
     pi = _panel_info(mod, run)
     lhs_ids, cand_ids = pi.pop("_lhs_ids"), pi.pop("_cand_ids")
     s.update(pi)
-    if not os.path.exists(mod.DATASET_CSV):
+    if not os.path.exists(mod.DATASET_CSV) or os.path.getsize(mod.DATASET_CSV) == 0:    # tidak ada atau kosong (0 byte)
         s["pending_lhs"] = len(set(lhs_ids))                 # belum ada dataset: semuanya belum disimulasikan
         s["pending_bo"] = len(set(cand_ids))
         s["note"] = "Dataset belum ada. Mulai dari: lhs, lalu run (simulasi CST)."

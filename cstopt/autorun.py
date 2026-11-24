@@ -141,7 +141,7 @@ class Ctx:
         if self.a.run_script:                                # pengganti uji (tools/mock_run.py), tanpa CST
             return [sys.executable, "-u", self.a.run_script, "--design", self.a.design, "--samples", samples]
         extra = ["--project", self.a.project] if self.a.project else []
-        return main_cmd("run", ["--samples", samples, "--auto-yes"] + extra)
+        return main_cmd("run", ["--samples", samples, "--auto-yes"] + extra + self.design_args())
 
     def design_args(self):
         return ["--design", self.a.design] if self.a.design else []

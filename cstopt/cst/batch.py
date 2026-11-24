@@ -133,17 +133,36 @@ def done_keys(path):
     return keys
 
 
-def prepare_out_csv(path):
-    """Jika CSV hasil lama berformat beda, ganti namanya agar tidak tercampur."""
+def prepare_out_csv(path, replace_old=False):
+    """Siapkan CSV hasil. Kembalikan True bila boleh lanjut.
+
+    File kosong (0 byte) dihapus. Bila header CSV lama BERBEDA dari kolom yang diharapkan, file lama TIDAK lagi dipindah diam diam
+    (penyebab dataset hilang dari lokasi aslinya saat desain/konfigurasi salah): run berhenti dan menjelaskan kolom yang berbeda.
+    Pakai --replace-old-csv hanya bila memang ingin memulai CSV baru (yang lama disimpan sebagai *_lama_<waktu>.csv).
+    """
     if not os.path.exists(path):
-        return
+        return True
+    if os.path.getsize(path) == 0:
+        os.remove(path)
+        print(f"[info] {path} kosong (0 byte), dihapus dan dibuat ulang.")
+        return True
     with open(path, newline="", encoding="utf-8") as fh:
         header = next(csv.reader(fh), [])
-    if header != ed.FIELDS:
-        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        new_name = path.replace(".csv", f"_lama_{stamp}.csv")
-        os.rename(path, new_name)
-        print(f"Format CSV hasil lama berbeda, dipindah ke: {new_name}")
+    if header == ed.FIELDS:
+        return True
+    only_old = [c for c in header if c not in ed.FIELDS]
+    only_new = [c for c in ed.FIELDS if c not in header]
+    print(f"[error] header CSV hasil berbeda dari yang diharapkan desain/konfigurasi saat ini: {path}\n"
+          f"  hanya di CSV   : {only_old}\n  hanya di konfigurasi: {only_new}\n"
+          "  Periksa --design (dan --extra-params). File TIDAK diubah.\n"
+          "  Bila memang ingin memulai CSV baru, jalankan lagi dengan --replace-old-csv (CSV lama disimpan, bukan dihapus).")
+    if not replace_old:
+        return False
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    new_name = path.replace(".csv", f"_lama_{stamp}.csv")
+    os.rename(path, new_name)
+    print(f"--replace-old-csv: CSV lama dipindah ke: {new_name}")
+    return True
 
 
 # ---------------------------------------------------------------- koneksi CST
@@ -381,6 +400,8 @@ def start_dialog_watcher():
 
 # ---------------------------------------------------------------- pengecekan
 def check_geometry(p):
+    if not {"PU", "LU", "LI", "Lp"} <= set(p):          # aturan bawaan khusus U-Slot; desain lain memakai geometry_problems miliknya
+        return []
     yb = p["Lp"] / 2 + p["PU"] - p["LU"] / 2
     yt = p["Lp"] / 2 + p["PU"] + p["LU"] / 2
     problems = []
@@ -430,6 +451,8 @@ def main():
     ap.add_argument("--extra-params", default="",
                     help="parameter CST tambahan dipisah koma (mis. hs,Wf untuk tebal substrat). Kolom hs/Wf di CSV "
                          "sampel terdeteksi otomatis. Pakai --run-name agar hasil tidak tercampur dengan dataset utama")
+    ap.add_argument("--replace-old-csv", action="store_true",
+                    help="bila header batch_lhs.csv lama berbeda, pindahkan ke *_lama_<waktu>.csv dan mulai CSV baru (bawaan: berhenti tanpa mengubah file)")
     ap.add_argument("--reuse-results", action="store_true",
                     help="jika CST sudah punya hasil untuk parameter yang sama, pakai itu (lewati solver)")
     ap.add_argument("--probe", action="store_true", help="cek koneksi, API, dan project yang terdeteksi")
@@ -452,7 +475,7 @@ def main():
     # --- perintah yang tidak butuh CST
     if args.check_samples:
         name = args.run_name or (os.path.splitext(os.path.basename(args.project))[0] if args.project else None)
-        run = name or default_run_name()
+        run = name or default_run_name(args.design)
         args.samples = args.samples or default_samples(run)
         detect_extras(args.samples)
         samples = select_samples(load_samples(args.samples), args.start, args.limit)
@@ -469,6 +492,13 @@ def main():
     if not check_api(m3d):
         return 1
     project = resolve_project(prj, args.project)
+    if not args.design and not hint:                 # desain tidak diberi: ikuti project CST yang terdeteksi (bukan desain bawaan)
+        pname = os.path.splitext(os.path.basename(str(project).replace("\\", "/")))[0]
+        other = cfg.design_for_run(pname, exact=True)
+        if other and other != getattr(design_mod, "NAME", None) and other != design_mod.__name__.split(".")[-1]:
+            print(f"[info] desain tidak diberikan; memakai desain '{other}' sesuai project CST '{pname}'.")
+            design_mod = cfg.configure(other, sys.modules[__name__])
+            activate_extras(extras)
     cfg.warn_project_mismatch(project, design_mod, args.design)
     rd = os.path.join(EXPORT_DIR, args.run_name) if args.run_name else ed.run_dir(project)
     out_csv = os.path.join(rd, CSV_NAME)
@@ -506,7 +536,8 @@ def main():
     if not validate_all(samples):
         return 1
 
-    prepare_out_csv(out_csv)
+    if not prepare_out_csv(out_csv, args.replace_old_csv):
+        return 1
     seen = done_keys(out_csv)
     todo = [(sid, p) for sid, p in samples if ed.param_key(p) not in seen]
     print(f"Sudah selesai sebelumnya: {len(samples) - len(todo)} | akan dijalankan: {len(todo)}")
@@ -525,6 +556,7 @@ def main():
             writer = csv.DictWriter(fh, fieldnames=ed.FIELDS)
             if write_header:
                 writer.writeheader()
+                fh.flush()                                    # header langsung tertulis (tidak tersisa file 0 byte bila proses dihentikan)
 
             for n, (sid, params) in enumerate(todo, 1):
                 print(f"\n=== Sampel {sid} ({n}/{len(todo)}): {params}")

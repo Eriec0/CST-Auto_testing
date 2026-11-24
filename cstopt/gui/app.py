@@ -777,8 +777,9 @@ class App:
         report = path.replace(".csv", "_report.csv") if path else None
         header, rows = read_csv_rows(report if report and os.path.exists(report) else path)
         oc = self.status.get("objective", {}).get("column", "")
-        want = ["sample_id", "sweep_bound", "acq", "pof", f"pred_{oc}", f"std_{oc}", "Lp", "Wp", "LU", "WU", "WD"]
-        cols = [c for c in want if c in header] or header[:8]
+        lead = ["sample_id", "sweep_bound", "acq", "pof", f"pred_{oc}", f"std_{oc}"]
+        extra = [c for c in header if c not in lead and not c.startswith(("pred_", "std_"))]     # kolom parameter desain aktif
+        cols = [c for c in lead + extra[:6] if c in header] or header[:8]
         self.cand.configure(columns=cols)
         for c in cols:
             self.cand.heading(c, text=c)
@@ -950,16 +951,16 @@ class App:
         self.run_cmd(cmd.lhs(self.lhs_n.get(), self.lhs_seed.get(), self.lhs_report.get(), self.design()))
 
     def do_probe(self):
-        self.run_cmd(cmd.run_probe(self.cst_project.get() or None))
+        self.run_cmd(cmd.run_probe(self.cst_project.get() or None, self.design()))
 
     def do_check(self):
-        self.run_cmd(cmd.run_check(self.cst_samples.get() or None, self.cst_project.get() or None))
+        self.run_cmd(cmd.run_check(self.cst_samples.get() or None, self.cst_project.get() or None, self.design()))
 
     def do_batch(self):
         samples = self.cst_samples.get() or None
         if not messagebox.askyesno("Jalankan batch CST", "Batch memakai CST dan dapat berjalan lama (sekitar 4-6 menit per sampel). Lanjutkan?"):
             return
-        self.run_cmd(cmd.run_batch(samples, self.cst_auto.get(), self.cst_limit.get(), self.cst_project.get() or None))
+        self.run_cmd(cmd.run_batch(samples, self.cst_auto.get(), self.cst_limit.get(), self.cst_project.get() or None, self.design()))
 
     def do_qc(self):
         self.run_cmd(cmd.qc(self.run_name()))

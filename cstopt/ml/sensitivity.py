@@ -136,7 +136,7 @@ def main():
             print(f"\n== KORELASI MENTAH dengan BW pecahan (n = {len(b)}, fr di pita) ==")
             print(corr.head(5).round(2).to_string())
 
-    if "fr4" in d.name.lower():
+    if "fr4" in d.name.lower() and set(REF_FR4_ARD_BW) <= set(d.params):      # pembanding hanya untuk desain yang punya parameter U-slot itu
         print("\n== PEMBANDING dengan temuan lama FR-4 (135 sampel) ==")
         ref = pd.Series(REF_FR4_ARD_BW)
         now = ard[oc]
