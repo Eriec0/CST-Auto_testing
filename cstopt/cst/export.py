@@ -290,7 +290,10 @@ def main():
     ap.add_argument("--ff-dir", default=None,
                     help="folder berisi ff_dir_phi0.txt & ff_dir_phi90.txt (default: data/<project>/)")
     ap.add_argument("--list", action="store_true", help="tampilkan item result tree lalu keluar")
+    ap.add_argument("--design", default=None, help="nama file di designs/ (default: desain bawaan)")
     args = ap.parse_args()
+    from cstopt.cst import config as cfg          # konstanta CST dari file desain (P1-1)
+    cfg.configure(args.design)
 
     res = cst.results.ProjectFile(args.project, allow_interactive=True).get_3d()
     if args.list:

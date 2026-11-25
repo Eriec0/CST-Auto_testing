@@ -1,0 +1,13 @@
+sample_id,base_id,plan,label,param,sign,dilewati,signs,catatan
+16501,165,oat,Lp+,Lp,1,0,,
+16502,165,oat,Lp-,Lp,-1,0,,
+16503,165,oat,Wp+,Wp,1,0,,
+16504,165,oat,Wp-,Wp,-1,0,,
+16505,165,oat,gU+,gU,1,1,,"dilewati, geometri tidak valid: WU terlalu sempit terhadap gU"
+16506,165,oat,gU-,gU,-1,0,,
+16507,165,oat,gD+,gD,1,0,,
+16508,165,oat,gD-,gD,-1,0,,
+16509,165,oat,LI+,LI,1,0,,
+16510,165,oat,LI-,LI,-1,0,,
+16511,165,oat,hs+,hs,1,0,,
+16512,165,oat,hs-,hs,-1,0,,

@@ -1,0 +1,13 @@
+sample_id,base_id,plan,label,param,sign,dilewati,signs,catatan
+18001,180,oat,Lp+,Lp,1,0,,
+18002,180,oat,Lp-,Lp,-1,0,,
+18003,180,oat,Wp+,Wp,1,0,,
+18004,180,oat,Wp-,Wp,-1,0,,
+18005,180,oat,gU+,gU,1,0,,
+18006,180,oat,gU-,gU,-1,0,,
+18007,180,oat,gD+,gD,1,0,,
+18008,180,oat,gD-,gD,-1,0,,
+18009,180,oat,LI+,LI,1,0,,
+18010,180,oat,LI-,LI,-1,0,,
+18011,180,oat,hs+,hs,1,0,,
+18012,180,oat,hs-,hs,-1,0,,

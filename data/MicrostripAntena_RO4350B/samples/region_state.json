@@ -1,0 +1,8 @@
+{
+ "sig": "tahap2_bandwidth|max bw_mhz|fr_ghz>=3.3;fr_ghz<=3.7;rl_band_min_db<=-10;d_peak_fr_dbi>=4;gain_fr_ieee_dbi>=4.5",
+ "side": 0.3,
+ "succ": 0,
+ "fail": 0,
+ "best": 234.2,
+ "n": 185
+}

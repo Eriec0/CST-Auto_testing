@@ -1,0 +1,17 @@
+sample_id,base_id,plan,label,param,sign,dilewati,signs,catatan
+17921,179,corners,fr_turun,,0,0,Lp+ Wp- gU+ gD- LI- hs-,
+17922,179,corners,fr_naik,,0,1,Lp- Wp+ gU- gD+ LI+ hs+,"dilewati, geometri tidak valid: DGS keluar dari proyeksi patch"
+17923,179,corners,bw_turun,,0,0,Lp+ Wp+ gU- gD- LI+ hs-,
+17924,179,corners,gain_turun,,0,1,Lp- Wp- gU- gD+ LI+ hs-,"dilewati, geometri tidak valid: DGS keluar dari proyeksi patch"
+17931,179,random,acak1,,0,0,Lp+ Wp+ gU+ gD- LI+ hs-,
+17932,179,random,acak2,,0,0,Lp- Wp+ gU- gD+ LI- hs-,
+17933,179,random,acak3,,0,0,Lp+ Wp- gU+ gD+ LI- hs+,
+17934,179,random,acak4,,0,0,Lp+ Wp- gU+ gD- LI- hs+,
+17935,179,random,acak5,,0,0,Lp+ Wp- gU+ gD- LI+ hs+,
+17936,179,random,acak6,,0,0,Lp+ Wp- gU- gD- LI+ hs-,
+17937,179,random,acak7,,0,1,Lp- Wp+ gU- gD- LI- hs+,"dilewati, geometri tidak valid: DGS keluar dari proyeksi patch"
+17938,179,random,acak8,,0,0,Lp+ Wp+ gU- gD+ LI- hs-,
+17939,179,random,acak9,,0,0,Lp- Wp- gU+ gD+ LI- hs+,
+17940,179,random,acak10,,0,1,Lp- Wp+ gU- gD+ LI+ hs+,"dilewati, geometri tidak valid: DGS keluar dari proyeksi patch"
+17941,179,random,acak11,,0,0,Lp+ Wp- gU- gD+ LI+ hs-,
+17942,179,random,acak12,,0,0,Lp- Wp+ gU- gD+ LI+ hs-,

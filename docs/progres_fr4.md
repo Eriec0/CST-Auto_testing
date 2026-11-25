@@ -58,3 +58,11 @@ Rincian: [pilot_h.md](pilot_h.md) dan [kontrol_tand.md](kontrol_tand.md).
   (RL minimum memburuk dari -20,5 ke -9,8 dB karena geometri tidak dicocokkan ulang). Ada trade-off BW dan gain; plateau BW pecahan sekitar 5%
   di FR-4 sebagian berasal dari rugi itu sendiri.
 - Berikutnya: BO pada Rogers RO4350B (lihat [substrat_ro4350b.md](substrat_ro4350b.md)) dan kurva Pareto BW terhadap gain untuk dua substrat.
+
+## Pembaruan 16 November 2026
+
+- Data FR-4 kini 156 baris (`data/MicrostripAntena/batch_lhs.csv`); hasil terbaik tidak berubah (sampel 137: BW 180,6 MHz, gain 2,80 dBi). Front Pareto BW terhadap gain 4 titik dan hypervolume 518,5 MHz*dBi; peringatan "belum representatif" muncul di `pareto` dan `report`.
+- Substrat RO4350B sudah dikerjakan: lihat [substrat_ro4350b.md](substrat_ro4350b.md), `PROGRESS.md`, dan [deviasi_proposal.md](deviasi_proposal.md). Ringkasan untuk dosen: [ringkasan_dosen.md](ringkasan_dosen.md).
+- Alat baru: `py main.py pareto` (tangga, knee, hypervolume), `validate`, `sensitivity`, `report`, `tools/make_tolerance.py`, `tools/analyze_tolerance.py`, `tools/package_dataset.py`.
+- Catatan: tautan `kontrol_tand.md` di atas tidak ada di zip repo yang dikirim ke Claude; periksa bahwa berkas itu ada di repo Anda.
+

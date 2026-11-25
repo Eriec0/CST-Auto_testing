@@ -1,0 +1,5 @@
+run,sample_id,bw_mhz,gain_fr_ieee_dbi,fr_ghz,rl_min_db,band_cover_pct,eta_rad_fr,d_peak_fr_dbi
+MicrostripAntena,137,180.63,2.803,3.698,-18.167,22.7,0.494,5.867
+MicrostripAntena,134,164.0,2.819,3.68,-22.097,25.4,0.4818,5.988
+MicrostripAntena,91,134.75,2.836,3.522,-29.482,33.4,0.461,6.126
+MicrostripAntena,95,126.25,2.894,3.462,-24.681,31.4,0.4537,6.221

@@ -1,0 +1,4 @@
+waktu,n_sampel,sinyal,ei_maks,f_terbaik,rasio
+2026-11-16 13:11:10,156,tahap2_bandwidth|max bw_mhz|fr_ghz>=3.3;fr_ghz<=3.7;rl_band_min_db<=-10;d_peak_fr_dbi>=4,4.941680444883764,180.63,0.0273580271543141
+2026-11-16 13:14:34,156,tahap2_bandwidth|max bw_mhz|fr_ghz>=3.3;fr_ghz<=3.7;rl_band_min_db<=-10;d_peak_fr_dbi>=4,4.941680444883764,180.63,0.0273580271543141
+2026-11-18 13:22:21,156,tahap2_bandwidth|max bw_mhz|fr_ghz>=3.3;fr_ghz<=3.7;rl_band_min_db<=-10;d_peak_fr_dbi>=4,3.5744145202786806,180.63,0.019788598351761506

@@ -52,8 +52,10 @@ class Design:
         self.mod = mod
         self.name = mod.NAME
         self.params = list(mod.PARAM_NAMES)
-        self.lo = np.array([mod.BOUNDS[k][0] for k in self.params], float)
-        self.hi = np.array([mod.BOUNDS[k][1] for k in self.params], float)
+        from cstopt import boundsio
+        b_eff, self.bounds_changed = boundsio.effective_bounds(mod)   # override per run (bounds_override.json), bila ada
+        self.lo = np.array([b_eff[k][0] for k in self.params], float)
+        self.hi = np.array([b_eff[k][1] for k in self.params], float)
         self.decimals = getattr(mod, "DECIMALS", 3)
         self.id_col = getattr(mod, "ID_COLUMN", "sample_id")
         self.dataset = mod.DATASET_CSV
@@ -217,7 +219,13 @@ def load_dataset(d):
     if miss:
         raise ValueError(f"Kolom tidak ada di dataset: {miss}")
     df = df.sort_values(d.id_col).reset_index(drop=True)
-    if d.band is not None and d.curves_dir:
+    custom = getattr(d.mod, "features", None)       # hook desain: features(df, d) -> df dengan kolom turunan
+    if callable(custom):
+        out = custom(df, d)
+        if not isinstance(out, pd.DataFrame) or len(out) != len(df):
+            raise ValueError(f"{d.mod.__name__}.features(df, d) harus mengembalikan DataFrame dengan {len(df)} baris")
+        df = out.reset_index(drop=True)
+    elif d.band is not None and d.curves_dir:      # bawaan: fitur kurva S11
         df = add_s11_features(df, d)
     d.activate(df)                       # pilih tahap BO aktif dari data (atau d.force_stage)
     need = [c for c in d.model_columns if c not in df.columns]
@@ -383,6 +391,46 @@ def region_auto(d, df, k=8, margin=0.15):
     return reg
 
 
+def region_adapt(d, df, state=None, eps=0.0, side0=0.3, grow=1.5, shrink=0.5, smin=0.05, smax=0.8,
+                 n_succ=2, n_fail=3):
+    """Trust region adaptif (P2-4). Kembalikan (region {param: (lo, hi)}, state baru, info).
+    Pusat = desain feasible terbaik (bila belum ada: objective terbaik tanpa melihat constraint, seperti region_auto).
+    Kotak = pusat +/- sisi/2 x lebar BOUNDS, dijepit ke BOUNDS. state = {sig, side, succ, fail, best, n}.
+    Pembaruan hanya bila ada sampel BARU sejak pemanggilan terakhir (memanggil ulang tanpa data baru tidak mengubah apa pun):
+    terbaik feasible membaik lebih dari eps -> sukses (n_succ berturut-turut: sisi x grow, maks smax);
+    tidak membaik -> gagal (n_fail berturut-turut: sisi x shrink, min smin). Selama belum ada yang feasible tidak ada hitungan gagal.
+    Keadaan di-reset bila tahap/fokus atau constraint berubah (sig)."""
+    oc = d.objective["column"]
+    sig = f"{d.stage_name}|{d.objective['goal']} {oc}|" + ";".join(
+        f"{c['column']}{c['op']}{c['value']:g}" for c in d.constraints)
+    st = dict(state) if state and state.get("sig") == sig else {"sig": sig, "side": side0, "succ": 0, "fail": 0,
+                                                                  "best": None, "n": 0}
+    ok = feasible_mask(d, df) & np.isfinite(df[oc].values.astype(float))
+    pool = df[ok] if ok.any() else df.dropna(subset=[oc])
+    row = pool.sort_values(oc, ascending=(d.objective["goal"] == "min")).iloc[0]
+    best = float(row[oc]) if ok.any() else None
+    n, info = len(df), "keadaan awal"
+    if st["n"] and n > st["n"]:                                   # ada sampel baru sejak pemanggilan terakhir
+        if best is None:
+            info = "belum ada yang feasible: sisi tetap"
+        else:
+            prev = st["best"]
+            improved = prev is None or d.sign * (best - prev) > eps
+            st["succ"], st["fail"] = (st["succ"] + 1, 0) if improved else (0, st["fail"] + 1)
+            info = "sukses" if improved else "gagal"
+            if st["succ"] >= n_succ:
+                st["side"], st["succ"], info = min(smax, st["side"] * grow), 0, "sisi diperbesar"
+            elif st["fail"] >= n_fail:
+                st["side"], st["fail"], info = max(smin, st["side"] * shrink), 0, "sisi diperkecil"
+    elif st["n"]:
+        info = "tidak ada sampel baru: keadaan tetap"
+    st["best"], st["n"] = best, n
+    c = row[d.params].values.astype(float)
+    half = 0.5 * st["side"] * (d.hi - d.lo)
+    reg = {p: (float(max(d.lo[j], c[j] - half[j])), float(min(d.hi[j], c[j] + half[j]))) for j, p in enumerate(d.params)}
+    return reg, st, info
+
+
 def parse_constraints(text):
     """'bw_mhz>=100,rl_band_min_db<=-10' -> [{'column','op','value'}]"""
     out = []
@@ -500,10 +548,15 @@ def refine(d, models, U0, f_best, xi, rng, n_iter=12, n_jit=300, s0=0.08):
 
 
 def suggest(d, df, q=5, kind="rbf", seed=0, pool=32768, xi_frac=0.01, n_restarts=5, min_dist=0.05,
-            spread=0.3):
+            spread=0.3, sweep=None, diversity=None):
     """Pilih q kandidat berikutnya. Kembalikan (DataFrame parameter, DataFrame laporan).
     min_dist : jarak minimum (ruang satuan [0,1]^d) dari data yang sudah ada
-    spread   : jarak minimum antar kandidat dalam SATU batch (agar batch tidak kembar)"""
+    spread   : jarak minimum antar kandidat dalam SATU batch (agar batch tidak kembar)
+    sweep    : None, atau {'column': kolom constraint, 'bounds': [b_1..b_q]}. Kandidat ke-i dipilih dengan nilai
+               constraint kolom itu = b_i (f_best dihitung ulang untuk batas itu), sehingga batch menyebar
+               sepanjang front Pareto (epsilon-constraint). Constraint asli dipulihkan setelah selesai.
+    diversity: None, atau R > 0. Setelah kandidat dipilih, akuisisi sisa dikali prod(1 - exp(-(jarak/R)^2)) terhadap
+               kandidat terpilih (penalti lunak, di atas penyaring keras `spread`; ruang satuan)."""
     rng = np.random.default_rng(seed)
     oc = d.objective["column"]
     models = fit_models(d, df, d.model_columns, kind, n_restarts, seed)
@@ -531,21 +584,41 @@ def suggest(d, df, q=5, kind="rbf", seed=0, pool=32768, xi_frac=0.01, n_restarts
         print(f"[info] Terbaik yang feasible saat ini ({oc}) = {d.sign * f_best:.4f} (sampel id "
               f"{int(df[d.id_col].iloc[ib])})")
 
+    sw_idx, cons0 = None, None
+    if sweep:
+        if len(sweep["bounds"]) != q:
+            raise ValueError("sweep: jumlah batas harus sama dengan q")
+        cons0 = [dict(c) for c in d.constraints]
+        sw_idx = [i for i, c in enumerate(d.constraints) if c["column"] == sweep["column"]]
+        if not sw_idx:
+            raise ValueError(f"sweep: '{sweep['column']}' bukan constraint aktif (tambahkan lewat --constraint)")
     cur, picks, rows, chosen = dict(models), [], [], []
-    for k in range(q):
-        acq, _, _ = acquisition(d, cur, U, f_best, xi)
+    try:
+      for k in range(q):
+        f_k = f_best
+        if sweep:                                   # constraint kandidat ke-k = batas sapuan ke-k
+            for i in sw_idx:
+                d.constraints[i]["value"] = float(sweep["bounds"][k])
+            f_k, _ = best_feasible(d, df)
+        acq, _, _ = acquisition(d, cur, U, f_k, xi)
         seeds = U[np.argsort(-acq)[:8]]
-        Ur = refine(d, cur, seeds, f_best, xi, rng)
+        Ur = refine(d, cur, seeds, f_k, xi, rng)
         allU = np.vstack([U, Ur])
-        a_all, ei_all, pof_all = acquisition(d, cur, allU, f_best, xi)
+        a_all, ei_all, pof_all = acquisition(d, cur, allU, f_k, xi)
         if chosen:
             far = cdist(allU, np.array(chosen)).min(axis=1) >= spread
             a_all = np.where(far, a_all, -np.inf)
+            if diversity:                           # penalti lunak (local penalization)
+                dist = cdist(allU, np.array(chosen))
+                pen = np.prod(1.0 - np.exp(-(dist / diversity) ** 2), axis=1)
+                a_all = np.where(a_all >= 0, a_all * pen, a_all / np.maximum(pen, 1e-12))
         j = int(np.argmax(a_all))
         x = allU[j]
         chosen.append(x)
         row = {**dict(zip(d.params, np.round(d.from_unit(x), d.decimals))),
                "acq": float(a_all[j]), "ei": float(ei_all[j]), "pof": float(pof_all[j])}
+        if sweep:
+            row["sweep_bound"] = float(sweep["bounds"][k])
         for col, mdl in models.items():          # prediksi memakai model ASLI (bukan fantasi)
             mu, sd = mdl.predict_t(x[None, :])
             r_mu, r_sd = mdl.to_raw(mu, sd)
@@ -558,6 +631,9 @@ def suggest(d, df, q=5, kind="rbf", seed=0, pool=32768, xi_frac=0.01, n_restarts
             mu, _ = cur[col].predict_t(x[None, :])
             cur[col] = cur[col].believe(x, float(mu[0]))
         U = U[cdist(U, x[None, :])[:, 0] >= spread]
+    finally:
+        if cons0 is not None:                       # pulihkan constraint asli
+            d.constraints = cons0
     return pd.DataFrame(picks), pd.DataFrame(rows)
 
 

@@ -13,6 +13,7 @@ Opsi lain:
 Format bo_candidates.csv sama dengan lhs_samples.csv, jadi tidak ada yang perlu diubah di cst/batch.py.
 """
 import argparse
+import json
 import os
 import shutil
 from datetime import datetime
@@ -84,8 +85,17 @@ def main():
     ap.add_argument("--region", default=None, help="region pencarian manual, mis. \"Lp=16:19,WD=7:8\" (lainnya rentang penuh)")
     ap.add_argument("--region-auto", default=None, metavar="K:MARGIN",
                     help="region otomatis di sekitar K desain terbaik, diperlebar MARGIN x lebar BOUNDS (mis. 8:0.15)")
+    ap.add_argument("--region-adapt", action="store_true",
+                    help="trust region adaptif di sekitar desain terbaik; sisi tumbuh/menyusut menurut kemajuan antar putaran "
+                         "(keadaan di samples/region_state.json); menggantikan --region dan --region-auto")
     ap.add_argument("--margin", default=None,
                     help="perketat constraint untuk PoF saja, mis. \"fr_ghz=0.1\" (menahan kandidat dari tepi pita)")
+    ap.add_argument("--sweep", default=None, metavar="KOLOM=LO:HI",
+                    help="sapuan epsilon-constraint: q batas merata dari LO ke HI untuk constraint KOLOM, satu batas per kandidat "
+                         "(mis. \"gain_fr_ieee_dbi=4.0:5.4\"); butuh --focus dan KOLOM harus constraint aktif")
+    ap.add_argument("--diversity", type=float, default=None, metavar="R",
+                    help="penalti lunak jarak antar kandidat: akuisisi dikali 1-exp(-(jarak/R)^2) (ruang satuan; "
+                         "efek baru terasa bila R > --spread, mis. 0.4 sampai 0.5)")
     ap.add_argument("--calibrate", action="store_true", help="kalibrasi std prediksi constraint dari validasi silang")
     ap.add_argument("--composite", dest="composite", action="store_true", default=None,
                     help="pakai model komposit (mis. gain = D + 10 log10 eta); bawaan mengikuti file desain")
@@ -101,11 +111,47 @@ def main():
         d.force_stage = args.stage - 1
     if args.composite is not None:
         d.use_composites = args.composite
+    sweep = None
+    if args.sweep:
+        if not args.focus:
+            ap.error("--sweep hanya dipakai bersama --focus")
+        try:
+            col, rng_txt = args.sweep.split("=")
+            lo, hi = (float(v) for v in rng_txt.split(":"))
+        except ValueError:
+            ap.error("--sweep harus berformat KOLOM=LO:HI, mis. gain_fr_ieee_dbi=4.0:5.4")
+        if args.q < 2:
+            ap.error("--sweep butuh -q >= 2")
+        col = col.strip()
+        if col not in [c["column"] for c in d.constraints]:
+            ap.error(f"--sweep: '{col}' bukan constraint fokus ini ({[c['column'] for c in d.constraints]}); "
+                     f"tambahkan lewat --constraint")
+        sweep = {"column": col, "bounds": [round(float(b), 6) for b in np.linspace(lo, hi, args.q)]}
+    if args.diversity is not None and args.diversity <= 0:
+        ap.error("--diversity harus > 0")
     d.calibrate = args.calibrate
     d.margins = mc.parse_margins(args.margin)
     df = mc.load_dataset(d)
-    if args.region and args.region_auto:
-        ap.error("pilih salah satu: --region atau --region-auto")
+    if sum(bool(x) for x in (args.region, args.region_auto, args.region_adapt)) > 1:
+        ap.error("pilih salah satu: --region, --region-auto, atau --region-adapt")
+    if args.region_adapt and not args.report:
+        state_path = os.path.join(os.path.dirname(d.candidates), "region_state.json")
+        state = None
+        if os.path.exists(state_path):
+            try:
+                with open(state_path, encoding="utf-8") as fh:
+                    state = json.load(fh)
+            except (OSError, ValueError):
+                state = None
+        eps = args.xi * float(np.nanstd(df[d.objective["column"]].values))
+        d.region, state, info = mc.region_adapt(d, df, state, eps)
+        try:
+            os.makedirs(os.path.dirname(state_path), exist_ok=True)
+            with open(state_path, "w", encoding="utf-8") as fh:
+                json.dump(state, fh, indent=1)
+        except OSError:
+            print(f"[peringatan] keadaan region tidak bisa disimpan: {state_path}")
+        print(f"[opsi] region adaptif: sisi {state['side']:.3f} x lebar BOUNDS (sukses {state['succ']}, gagal {state['fail']}; {info})")
     if args.region:
         d.region = mc.parse_region(d, args.region)
     elif args.region_auto:
@@ -128,7 +174,8 @@ def main():
         return
 
     cand, rep = mc.suggest(d, df, q=args.q, kind=args.kernel, seed=args.seed, pool=args.pool,
-                           xi_frac=args.xi, n_restarts=args.restarts, spread=args.spread)
+                           xi_frac=args.xi, n_restarts=args.restarts, spread=args.spread, sweep=sweep,
+                           diversity=args.diversity)
     # id kandidat BO selalu > N_INITIAL agar tidak bentrok dengan id sampel LHS yang belum dijalankan
     next_id = max(int(df[d.id_col].max()), int(d.n_initial)) + 1
     cand.insert(0, d.id_col, range(next_id, next_id + len(cand)))
@@ -144,14 +191,46 @@ def main():
 
     oc = d.objective["column"]
     extra = [c for c in dict.fromkeys(c["column"] for c in d.constraints) if c != oc]   # tanpa duplikat
-    show = [d.id_col, "acq", "pof", f"pred_{oc}", f"std_{oc}"] + [f"pred_{c}" for c in extra]
+    show = [d.id_col] + (["sweep_bound"] if sweep else []) + ["acq", "pof", f"pred_{oc}", f"std_{oc}"] \
+        + [f"pred_{c}" for c in extra]
     pd.set_option("display.width", 200)
     print(f"\n{len(cand)} kandidat disimpan: {d.candidates}")
     print(rep[show].round(4).to_string(index=False))
     warn_hits(mc.edge_hits(d, cand[d.params].values), "kandidat BO ini")
+    if sweep:
+        print(f"\n[sweep] {sweep['column']} >= " + ", ".join(f"{b:g}" for b in sweep["bounds"])
+              + " (satu batas per kandidat); aturan berhenti dilewati karena EI antar batas tidak sebanding.")
+    else:
+        stop_rule(d, df, rep)
     print(f"\nLaporan lengkap (prediksi mean/std semua target): {rep_path}")
     print("\nLangkah berikutnya:")
     print(f"  py main.py run --samples \"{d.candidates}\" --auto-yes")
+
+
+def stop_rule(d, df, rep):
+    """Aturan berhenti (hanya informasi): rasio EI maks kandidat terhadap |objective terbaik yang feasible|.
+    Objective tidak ditransformasi, jadi keduanya dalam satuan asli. Bila rasio < 1% pada dua putaran berurutan
+    (objective dan constraint yang sama) dicetak bahwa BO dianggap konvergen. Tidak menghentikan apa pun dan tidak mengubah kandidat."""
+    f_best, _ = mc.best_feasible(d, df)
+    if f_best is None or "ei" not in rep.columns or abs(f_best) < 1e-12:
+        return
+    ei_max = float(rep["ei"].max())
+    ratio = ei_max / abs(f_best)
+    sig = f"{d.stage_name}|{d.objective['goal']} {d.objective['column']}|" + ";".join(
+        f"{c['column']}{c['op']}{c['value']:g}" for c in d.constraints)
+    path = os.path.join(d.models_dir, "ei_history.csv")
+    row = pd.DataFrame([{"waktu": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "n_sampel": len(df), "sinyal": sig,
+                         "ei_maks": ei_max, "f_terbaik": abs(f_best), "rasio": ratio}])
+    try:
+        os.makedirs(d.models_dir, exist_ok=True)
+        hist = pd.concat([pd.read_csv(path), row], ignore_index=True) if os.path.exists(path) else row
+        hist.to_csv(path, index=False)
+    except OSError:
+        hist = row
+    same = hist[hist["sinyal"] == sig].tail(2)
+    print(f"\n[info] EI maks / |objective terbaik| = {100 * ratio:.2f}% (ambang konvergen: di bawah 1% pada dua putaran berurutan)")
+    if len(same) == 2 and (same["rasio"] < 0.01).all():
+        print("[info] BO dianggap konvergen untuk objective dan constraint ini (hanya informasi, tidak menghentikan apa pun).")
 
 
 if __name__ == "__main__":

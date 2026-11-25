@@ -22,6 +22,52 @@ def _file_info(path):
     return {"path": path, "exists": os.path.exists(path), "time": _stamp(path) if os.path.exists(path) else None}
 
 
+def _csv_ids(path, id_col):
+    """Daftar id dari satu CSV sampel (ringan, tanpa pandas). [] bila berkas tidak ada atau tidak terbaca."""
+    import csv
+    if not os.path.exists(path):
+        return []
+    try:
+        with open(path, newline="", encoding="utf-8") as fh:
+            rd = csv.DictReader(fh)
+            col = id_col if id_col in (rd.fieldnames or []) else (rd.fieldnames or [None])[0]
+            out = []
+            for r in rd:
+                try:
+                    out.append(int(float(r[col])))
+                except (TypeError, ValueError, KeyError):
+                    pass
+            return out
+    except (OSError, UnicodeDecodeError, csv.Error):
+        return []
+
+
+def _panel_info(mod, run):
+    """Info ringan untuk panel GUI tab 1 sampai 3 (tanpa dataset: hanya bagian yang tidak butuh data)."""
+    info = {}
+    try:
+        from cstopt import boundsio
+        eff, changed = boundsio.effective_bounds(mod, announce=False)
+        base = boundsio.base_bounds(mod)
+        info["params"] = [{"name": k, "lo": eff[k][0], "hi": eff[k][1], "base_lo": base[k][0], "base_hi": base[k][1],
+                           "changed": k in changed} for k in mod.PARAM_NAMES if k in eff]
+    except Exception as e:                                   # berkas override rusak: jangan menjatuhkan status
+        info["params_error"] = f"{type(e).__name__}: {e}"
+    idc = getattr(mod, "ID_COLUMN", "sample_id")
+    lhs_path = os.path.join(paths.samples_dir(run), "lhs_samples.csv")
+    lhs_ids = _csv_ids(lhs_path, idc)
+    info["n_lhs"] = len(lhs_ids)
+    info["lhs_time"] = _stamp(lhs_path) if os.path.exists(lhs_path) else None
+    info["_lhs_ids"] = lhs_ids
+    cand = getattr(mod, "CANDIDATES_CSV", os.path.join(paths.samples_dir(run), "bo_candidates.csv"))
+    info["_cand_ids"] = _csv_ids(cand, idc)
+    cdir = getattr(mod, "CURVES_DIR", os.path.join(paths.run_dir(run), "curves"))
+    info["n_curves"] = len(glob.glob(os.path.join(cdir, "s11_sample*.csv")))
+    ds = mod.DATASET_CSV
+    info["last_sim"] = _stamp(ds) if os.path.exists(ds) else None
+    return info
+
+
 def summary(design=None):
     """Kembalikan dict ringkasan. Tidak melempar error bila data belum ada (isi 'error' / 'note')."""
     mod = load_design_module(design)
@@ -38,7 +84,12 @@ def summary(design=None):
     }
     s["figures"] = sorted(glob.glob(os.path.join(paths.figures_dir(run), "*.png")))
     s["foci"] = list(getattr(mod, "FOCI", {}))
-    if not os.path.exists(mod.DATASET_CSV):
+    pi = _panel_info(mod, run)
+    lhs_ids, cand_ids = pi.pop("_lhs_ids"), pi.pop("_cand_ids")
+    s.update(pi)
+    if not os.path.exists(mod.DATASET_CSV) or os.path.getsize(mod.DATASET_CSV) == 0:    # tidak ada atau kosong (0 byte)
+        s["pending_lhs"] = len(set(lhs_ids))                 # belum ada dataset: semuanya belum disimulasikan
+        s["pending_bo"] = len(set(cand_ids))
         s["note"] = "Dataset belum ada. Mulai dari: lhs, lalu run (simulasi CST)."
         return s
     try:
@@ -58,8 +109,10 @@ def summary(design=None):
     s["foci"] = list(d.foci)
     oc = d.objective["column"]
     s["objective"] = {"column": oc, "goal": d.objective["goal"]}
+    s["bounds_changed"] = list(getattr(d, "bounds_changed", []))     # parameter dengan override rentang (bounds_override.json)
     ok = mc.feasible_mask(d, df)
     s["n_feasible"] = int(ok.sum())
+    s["feasible_ids"] = [int(x) for x in ids[ok]]               # untuk sorotan di tab Data GUI
     pool = df[ok] if ok.any() else df
     pool = pool.dropna(subset=[oc]).sort_values(oc, ascending=(d.objective["goal"] == "min"))
     if len(pool):
@@ -72,7 +125,37 @@ def summary(design=None):
     if os.path.exists(cand):
         import pandas as pd
         s["n_candidates"] = int(len(pd.read_csv(cand)))
+    have = set(int(x) for x in ids)
+    s["pending_lhs"] = len(set(lhs_ids) - have)               # id di lhs_samples.csv yang belum ada di dataset
+    s["pending_bo"] = len(set(cand_ids) - have)
+    s["qc_view"] = _qc_view(mod, d, df, s.get("n_curves", 0))
     return s
+
+
+def _qc_view(mod, d, df, n_curves):
+    """Ringkasan data untuk panel tab 3 (angka dari kolom dataset yang sudah dimuat; bukan pengganti `qc`)."""
+    import numpy as np
+    out = {"n": int(len(df)), "n_curves": int(n_curves)}
+    lo, hi = getattr(mod, "BAND_GHZ", (3.3, 3.7))
+    rl = float(getattr(mod, "RL_LIMIT_DB", -10.0))
+    out["band"] = [float(lo), float(hi)]
+    out["rl_limit"] = rl
+    if "fr_ghz" in df.columns:
+        fr = df["fr_ghz"]
+        out["in_band"] = int(((fr >= lo) & (fr <= hi)).sum())
+    if "rl_min_db" in df.columns:
+        out["rl_ok"] = int((df["rl_min_db"] <= rl).sum())
+    if "gain_fr_ieee_dbi" in df.columns:
+        g = df["gain_fr_ieee_dbi"].dropna()
+        if len(g):
+            out["gain_max"] = float(g.max())
+            out["gain_median"] = float(np.median(g))
+    if "bw_mhz" in df.columns:
+        b = df["bw_mhz"].dropna()
+        if len(b):
+            out["bw_max"] = float(b.max())
+    out["nan_cells"] = int(df[[c for c in getattr(mod, "TARGETS", []) if c in df.columns]].isna().sum().sum())
+    return out
 
 
 def format_summary(s):
@@ -86,6 +169,8 @@ def format_summary(s):
         st = s["stage"]
         L.append(f"Tahap BO : {st['index']}/{st['total']} ({st['name']}), objective {s['objective']['goal']} {s['objective']['column']}")
         L.append(f"Feasible : {s['n_feasible']}/{s['n_samples']} sampel memenuhi constraint tahap ini")
+        if s.get("bounds_changed"):
+            L.append(f"Rentang  : override aktif ({', '.join(s['bounds_changed'])}); lihat: py main.py bounds")
         if "best" in s:
             b = s["best"]
             tag = "terbaik feasible" if b["feasible"] else "terbaik (belum ada yang feasible)"

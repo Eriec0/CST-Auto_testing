@@ -1,0 +1,5 @@
+sample_id,plan,direncanakan,dilewati,belum_tersimulasi,tersimulasi,lulus,yield_pct
+165,oat,12,1,0,11,9,81.82
+165,corners,4,2,0,2,0,0.0
+165,random,12,5,0,7,6,85.71
+165,semua,28,8,0,20,15,75.0

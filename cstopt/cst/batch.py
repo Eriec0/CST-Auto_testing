@@ -47,6 +47,7 @@ import cst.interface
 import cst.results
 
 from cstopt import paths
+from cstopt import substrate
 from cstopt.cst import export as ed
 from cstopt.cst.farfield import peak_over_files
 from cstopt.loader import default_run_name
@@ -69,11 +70,7 @@ REQUIRED = ["StoreDoubleParameter", "full_history_rebuild", "SelectTreeItem",
 
 
 # ---------------------------------------------------------------- sampel LHS
-# Baseline parameter ekstra (dipakai untuk mengembalikan model setelah batch).
-# Loss tangent: nama `tand` ditolak CST (bentrok dengan nama objek VBA), jadi beberapa nama alternatif disediakan;
-# pakai SATU saja, sesuai nama yang diterima CST dan nama kolom di CSV sampel.
-LOSS_NAMES = ["lossTan", "dLoss", "tanDelta", "tdelta"]
-BASE_EXTRA = {"hs": 1.6, "Wf": 3.11, **{n: 0.025 for n in LOSS_NAMES}}
+BASE_EXTRA = {"hs": 1.6, "Wf": 3.11}      # baseline parameter ekstra (dipakai untuk mengembalikan model setelah batch)
 
 
 def activate_extras(names):
@@ -136,17 +133,36 @@ def done_keys(path):
     return keys
 
 
-def prepare_out_csv(path):
-    """Jika CSV hasil lama berformat beda, ganti namanya agar tidak tercampur."""
+def prepare_out_csv(path, replace_old=False):
+    """Siapkan CSV hasil. Kembalikan True bila boleh lanjut.
+
+    File kosong (0 byte) dihapus. Bila header CSV lama BERBEDA dari kolom yang diharapkan, file lama TIDAK lagi dipindah diam diam
+    (penyebab dataset hilang dari lokasi aslinya saat desain/konfigurasi salah): run berhenti dan menjelaskan kolom yang berbeda.
+    Pakai --replace-old-csv hanya bila memang ingin memulai CSV baru (yang lama disimpan sebagai *_lama_<waktu>.csv).
+    """
     if not os.path.exists(path):
-        return
+        return True
+    if os.path.getsize(path) == 0:
+        os.remove(path)
+        print(f"[info] {path} kosong (0 byte), dihapus dan dibuat ulang.")
+        return True
     with open(path, newline="", encoding="utf-8") as fh:
         header = next(csv.reader(fh), [])
-    if header != ed.FIELDS:
-        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        new_name = path.replace(".csv", f"_lama_{stamp}.csv")
-        os.rename(path, new_name)
-        print(f"Format CSV hasil lama berbeda, dipindah ke: {new_name}")
+    if header == ed.FIELDS:
+        return True
+    only_old = [c for c in header if c not in ed.FIELDS]
+    only_new = [c for c in ed.FIELDS if c not in header]
+    print(f"[error] header CSV hasil berbeda dari yang diharapkan desain/konfigurasi saat ini: {path}\n"
+          f"  hanya di CSV   : {only_old}\n  hanya di konfigurasi: {only_new}\n"
+          "  Periksa --design (dan --extra-params). File TIDAK diubah.\n"
+          "  Bila memang ingin memulai CSV baru, jalankan lagi dengan --replace-old-csv (CSV lama disimpan, bukan dihapus).")
+    if not replace_old:
+        return False
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    new_name = path.replace(".csv", f"_lama_{stamp}.csv")
+    os.rename(path, new_name)
+    print(f"--replace-old-csv: CSV lama dipindah ke: {new_name}")
+    return True
 
 
 # ---------------------------------------------------------------- koneksi CST
@@ -183,6 +199,21 @@ def set_params(m3d, params):
     if bad:
         raise RuntimeError(f"Parameter tidak sesuai setelah diset (diminta, terbaca): {bad}")
     print("  parameter terverifikasi (dibaca balik dari CST).")
+
+
+def check_substrate(m3d, design_mod):
+    """Cetak hs dan Wf di project CST dan peringatan bila berbeda dari substrat desain (mis. nilai FR-4 tertinggal setelah run toleransi). Tidak pernah menghentikan run."""
+    sub = getattr(design_mod, "SUBSTRATE", None)
+    if not sub:
+        return
+    try:
+        hs, wf = float(m3d.RestoreDoubleParameter("hs")), float(m3d.RestoreDoubleParameter("Wf"))
+    except Exception as e:                                # noqa: BLE001  (project tanpa parameter hs atau Wf)
+        print(f"  [info] hs dan Wf tidak terbaca dari project ({_short_err(e)}); pemeriksaan substrat dilewati.")
+        return
+    print(f"Substrat di project: hs = {hs:g} mm, Wf = {wf:g} mm (desain: {sub.get('material', '?')}, er {sub.get('er')}, h {sub.get('h')} mm)")
+    for w in substrate.check_values(sub, hs, wf):
+        print("  [PERINGATAN] " + w)
 
 
 def _short_err(e):
@@ -369,6 +400,8 @@ def start_dialog_watcher():
 
 # ---------------------------------------------------------------- pengecekan
 def check_geometry(p):
+    if not {"PU", "LU", "LI", "Lp"} <= set(p):          # aturan bawaan khusus U-Slot; desain lain memakai geometry_problems miliknya
+        return []
     yb = p["Lp"] / 2 + p["PU"] - p["LU"] / 2
     yt = p["Lp"] / 2 + p["PU"] + p["LU"] / 2
     problems = []
@@ -405,6 +438,8 @@ def validate_all(samples):
 def main():
     ap = argparse.ArgumentParser(description="Batch simulasi CST dari sampel LHS/BO")
     ap.add_argument("--project", default=None, help="file .cst yang sedang terbuka (default: dideteksi dari CST)")
+    ap.add_argument("--design", default=None,
+                    help="nama file di designs/ (default: dicocokkan dari --run-name atau --project, lalu desain bawaan)")
     ap.add_argument("--run-name", default=None,
                     help="nama folder keluaran di data/ (default: nama file project tanpa .cst)")
     ap.add_argument("--samples", default=None,
@@ -416,6 +451,8 @@ def main():
     ap.add_argument("--extra-params", default="",
                     help="parameter CST tambahan dipisah koma (mis. hs,Wf untuk tebal substrat). Kolom hs/Wf di CSV "
                          "sampel terdeteksi otomatis. Pakai --run-name agar hasil tidak tercampur dengan dataset utama")
+    ap.add_argument("--replace-old-csv", action="store_true",
+                    help="bila header batch_lhs.csv lama berbeda, pindahkan ke *_lama_<waktu>.csv dan mulai CSV baru (bawaan: berhenti tanpa mengubah file)")
     ap.add_argument("--reuse-results", action="store_true",
                     help="jika CST sudah punya hasil untuk parameter yang sama, pakai itu (lewati solver)")
     ap.add_argument("--probe", action="store_true", help="cek koneksi, API, dan project yang terdeteksi")
@@ -424,6 +461,10 @@ def main():
     ap.add_argument("--test-set", action="store_true", help="uji ganti parameter saja")
     ap.add_argument("--test-export", action="store_true", help="uji ekspor farfield saja")
     args = ap.parse_args()
+
+    from cstopt.cst import config as cfg          # konstanta CST dari file desain (P1-1)
+    hint = args.run_name or (os.path.splitext(os.path.basename(args.project))[0] if args.project else None)
+    design_mod = cfg.configure(args.design or cfg.design_for_run(hint), sys.modules[__name__])
 
     extras = [x.strip() for x in args.extra_params.split(",") if x.strip()]
     unknown = [x for x in extras if x not in BASE_EXTRA]
@@ -434,7 +475,7 @@ def main():
     # --- perintah yang tidak butuh CST
     if args.check_samples:
         name = args.run_name or (os.path.splitext(os.path.basename(args.project))[0] if args.project else None)
-        run = name or default_run_name()
+        run = name or default_run_name(args.design)
         args.samples = args.samples or default_samples(run)
         detect_extras(args.samples)
         samples = select_samples(load_samples(args.samples), args.start, args.limit)
@@ -451,11 +492,20 @@ def main():
     if not check_api(m3d):
         return 1
     project = resolve_project(prj, args.project)
+    if not args.design and not hint:                 # desain tidak diberi: ikuti project CST yang terdeteksi (bukan desain bawaan)
+        pname = os.path.splitext(os.path.basename(str(project).replace("\\", "/")))[0]
+        other = cfg.design_for_run(pname, exact=True)
+        if other and other != getattr(design_mod, "NAME", None) and other != design_mod.__name__.split(".")[-1]:
+            print(f"[info] desain tidak diberikan; memakai desain '{other}' sesuai project CST '{pname}'.")
+            design_mod = cfg.configure(other, sys.modules[__name__])
+            activate_extras(extras)
+    cfg.warn_project_mismatch(project, design_mod, args.design)
     rd = os.path.join(EXPORT_DIR, args.run_name) if args.run_name else ed.run_dir(project)
     out_csv = os.path.join(rd, CSV_NAME)
     args.samples = args.samples or os.path.join(rd, "samples", "lhs_samples.csv")
     detect_extras(args.samples)
     print(f"Project : {project}\nKeluaran: {rd}")
+    check_substrate(m3d, design_mod)
     if args.probe:
         return 0
     os.makedirs(os.path.join(rd, "curves"), exist_ok=True)
@@ -486,7 +536,8 @@ def main():
     if not validate_all(samples):
         return 1
 
-    prepare_out_csv(out_csv)
+    if not prepare_out_csv(out_csv, args.replace_old_csv):
+        return 1
     seen = done_keys(out_csv)
     todo = [(sid, p) for sid, p in samples if ed.param_key(p) not in seen]
     print(f"Sudah selesai sebelumnya: {len(samples) - len(todo)} | akan dijalankan: {len(todo)}")
@@ -505,6 +556,7 @@ def main():
             writer = csv.DictWriter(fh, fieldnames=ed.FIELDS)
             if write_header:
                 writer.writeheader()
+                fh.flush()                                    # header langsung tertulis (tidak tersisa file 0 byte bila proses dihentikan)
 
             for n, (sid, params) in enumerate(todo, 1):
                 print(f"\n=== Sampel {sid} ({n}/{len(todo)}): {params}")
@@ -541,7 +593,7 @@ def main():
 
                 print(f"  fr={row['fr_ghz']} GHz | RL={row['rl_min_db']} dB | BW={row['bw_mhz']} MHz | "
                       f"monitor fr={row['f_mon_fr_ghz']} GHz")
-                print(f"  D(3,5)={row['d_peak_dbi']} dBi | D(fr)={row['d_peak_fr_dbi']} dBi | "
+                print(f"  D({ed.F0_GHZ:g})={row['d_peak_dbi']} dBi | D(fr)={row['d_peak_fr_dbi']} dBi | "
                       f"eta_rad(fr)={row['eta_rad_fr']} | gain(fr,IEEE)={row['gain_fr_ieee_dbi']} dBi")
                 if row["n_eff_points"] < len(ed.MONITORS_GHZ):
                     print(f"  [peringatan] kurva efisiensi hanya {row['n_eff_points']} titik "

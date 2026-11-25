@@ -36,7 +36,10 @@ from cstopt.ml import core as mc                          # noqa: E402
 from cstopt.report import pareto as pr                    # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-FOCUS_COL = {"bw": "bw_mhz", "cover": "band_cover_pct", "gain": "gain_fr_ieee_dbi"}
+FOCUS_COL = {"bw": "bw_mhz", "cover": "band_cover_pct", "gain": "gain_fr_ieee_dbi", "rl": "rl_depth_db"}
+# rl_depth_db = -rl_min_db (kolom turunan, makin besar makin baik): fokus RL memilih desain dengan S11 minimum paling dalam (paling negatif) di antara sampel fisibel.
+FOCUS_NAME = {"bw": "BW tertinggi", "cover": "cakupan pita tertinggi", "gain": "gain tertinggi", "rl": "RL terdalam"}
+OBJ_LABEL = {"rl_depth_db": "kedalaman RL = -rl_min_db (dB)"}
 T_BW, T_GAIN = 200.0, 5.0          # target proposal
 NEED = ["sample_id", "fr_ghz", "rl_min_db", "bw_mhz", "gain_fr_ieee_dbi"]
 
@@ -60,13 +63,19 @@ def versions():
 
 
 def design_for_run(run):
+    """Nama file desain untuk sebuah run: RUN_NAME sama persis, atau awalan terpanjang yang diikuti garis bawah (mis. _fine, _tol, _uji); sama dengan
+    cstopt.loader.module_for_run. Tanpa ini run turunan jatuh ke desain bawaan dan memakai pita antena lain."""
+    best, best_len = None, -1
     for name in paths.list_designs():
         try:
-            if load_design_module(name).RUN_NAME == run:
-                return name
+            rn = load_design_module(name).RUN_NAME
         except Exception:
             continue
-    return None
+        if rn == run:
+            return name
+        if rn and run.startswith(rn + "_") and len(rn) > best_len:
+            best, best_len = name, len(rn)
+    return best
 
 
 def parse_scenarios(items, runs):
@@ -95,6 +104,36 @@ def feasible(df, band, rl_limit, cons):
     return ok.fillna(False)
 
 
+def tol_yields(run, out_dir):
+    """{sample_id: (yield_pct, lulus, tersimulasi)} dari tolerance_<run>_yield.csv (baris plan 'semua') di out_dir atau data/_compare; {} bila tidak ada."""
+    for d in (out_dir, os.path.join(paths.DATA_DIR, "_compare")):
+        p = os.path.join(d, f"tolerance_{run}_yield.csv")
+        if os.path.exists(p):
+            try:
+                y = pd.read_csv(p)
+                y = y[y["plan"] == "semua"]
+                return {int(a): (float(b), int(c), int(e)) for a, b, c, e in zip(y.sample_id, y.yield_pct, y.lulus, y.tersimulasi)}
+            except (OSError, ValueError, KeyError):
+                pass
+    return {}
+
+
+def bound_notes(run, row, role, dd, frac=0.01):
+    """Peringatan bila parameter desain berada dalam `frac` rentang dari batas efektif (rentang override ikut dihitung)."""
+    out = []
+    if dd is None:
+        return out
+    for p, lo, hi in zip(dd.params, dd.lo, dd.hi):
+        if p not in row.index or not np.isfinite(hi - lo) or hi <= lo:
+            continue
+        v, rng = float(row[p]), float(hi - lo)
+        if v >= hi - frac * rng:
+            out.append(f"{run}: sampel {int(row.sample_id)} ({role}): {p} = {v:.3f} mm berada di batas atas rentang efektif ({hi:.3f} mm); optimum mungkin dibatasi rentang.")
+        elif v <= lo + frac * rng:
+            out.append(f"{run}: sampel {int(row.sample_id)} ({role}): {p} = {v:.3f} mm berada di batas bawah rentang efektif ({lo:.3f} mm); optimum mungkin dibatasi rentang.")
+    return out
+
+
 def f_(v, dp=2):
     return "tidak ada" if v is None or (isinstance(v, float) and not np.isfinite(v)) else f"{v:.{dp}f}"
 
@@ -107,6 +146,8 @@ def main():
     ap.add_argument("--band", nargs=2, type=float, default=None, metavar=("LO", "HI"))
     ap.add_argument("--rl-limit", type=float, default=-10.0)
     ap.add_argument("--out-dir", default=os.path.join(paths.DATA_DIR, "_compare"))
+    ap.add_argument("--min-yield", type=float, default=90.0, metavar="PERSEN",
+                    help="ambang yield toleransi (baris plan 'semua' dari analyze_tolerance) untuk desain rekomendasi; bawaan 90")
     args = ap.parse_args()
 
     runs = args.runs or pr.default_runs()
@@ -115,6 +156,9 @@ def main():
     os.makedirs(args.out_dir, exist_ok=True)
     designs = {r: design_for_run(r) for r in runs}
     d0 = mc.load_design(next((v for v in designs.values() if v), None))
+    global T_BW, T_GAIN                                  # target dari file desain pertama (CST["bw_min_mhz"], CST["gain_min_dbi"]); bawaan 200 MHz dan 5 dBi
+    cst0 = getattr(getattr(d0, "mod", None), "CST", None) or {}
+    T_BW, T_GAIN = float(cst0.get("bw_min_mhz", T_BW)), float(cst0.get("gain_min_dbi", T_GAIN))
     band = tuple(args.band) if args.band else tuple(d0.band or load_design_module().BAND_GHZ)
     rl = args.rl_limit
     scen = parse_scenarios(args.constraint, runs)
@@ -127,6 +171,8 @@ def main():
             notes.append(f"Run {r}: batch_lhs.csv tidak ada, dilewati.")
             continue
         df = pd.read_csv(p).sort_values("sample_id").reset_index(drop=True)
+        if "rl_min_db" in df.columns:
+            df["rl_depth_db"] = -df["rl_min_db"]
         miss = [c for c in NEED + [obj] if c not in df.columns]
         if miss:
             notes.append(f"Run {r}: kolom hilang {miss}, dilewati.")
@@ -155,26 +201,41 @@ def main():
             ok = feasible(df, band, rl, cons) & df[obj].notna()
             best[(r, label)] = (df.loc[df.loc[ok, obj].idxmax()] if ok.any() else None, int(ok.sum()), cons)
 
+    # desain rekomendasi: fokus tertinggi di antara desain yang punya data toleransi dengan yield di atas ambang
+    yields = {r: tol_yields(r, args.out_dir) for r in runs}
+    rec = {}
+    for r in runs:
+        df = data[r]
+        good = [sid for sid, v in yields[r].items() if v[0] >= args.min_yield]
+        for label, cons in scen[r]:
+            ok = feasible(df, band, rl, cons) & df[obj].notna() & df.sample_id.isin(good)
+            rec[(r, label)] = df.loc[df.loc[ok, obj].idxmax()] if ok.any() else None
+        if not yields[r]:
+            notes.append(f"{r}: tidak ada data toleransi (tolerance_{r}_yield.csv); desain rekomendasi tidak dibuat. Jalankan tools/analyze_tolerance.py --run {r}.")
+    seen = set()
+    for (r, label), (b, _, _) in best.items():
+        dd = mc.load_design(designs[r]) if designs.get(r) else None
+        for role, row in ((f"desain {FOCUS_NAME[args.focus]}", b), ("desain rekomendasi", rec.get((r, label)))):
+            if row is not None and (r, int(row.sample_id)) not in seen:
+                seen.add((r, int(row.sample_id)))
+                notes += bound_notes(r, row, role, dd)
+
     md = ["# Laporan hasil optimasi antena", ""]
     md += ["## 1. Informasi reproduksi", "",
            f"- Tanggal: {datetime.date.today().isoformat()}",
            f"- Commit git: {git_hash()}",
            f"- Paket: {versions()}",
            "- Sampel per run: " + "; ".join(f"{r} {len(data[r])} sampel" for r in runs),
-           f"- Syarat dasar: fr {band[0]:g} sampai {band[1]:g} GHz dan RL minimum <= {rl:g} dB; desain terbaik dipilih dengan memaksimalkan {obj}", ""]
+           f"- Syarat dasar: fr {band[0]:g} sampai {band[1]:g} GHz dan RL minimum <= {rl:g} dB; desain {FOCUS_NAME[args.focus]} dipilih dengan memaksimalkan {OBJ_LABEL.get(obj, obj)}; desain rekomendasi: {FOCUS_NAME[args.focus]} di antara desain dengan yield toleransi >= {args.min_yield:g}%", ""]
     md += ["## 2. Definisi", "",
            "- BW: lebar pita S11 <= -10 dB di sekitar minimum global (BW = 0 bila RL minimum > -10 dB).",
            f"- Cakupan pita: persentase frekuensi di {band[0]:g} sampai {band[1]:g} GHz dengan S11 <= -10 dB.",
            "- Gain: gain IEEE di frekuensi resonansi (D + 10 log eta).",
            "- Substrat: nilai epsilon dan tan delta di bawah berasal dari file desain; konfirmasikan dengan material library CST.",
-           f"- Target proposal: fr {band[0]:g} sampai {band[1]:g} GHz, RL minimum <= {rl:g} dB, BW >= {T_BW:g} MHz, gain >= {T_GAIN:g} dBi.", ""]
+           f"- Target proposal: fr {band[0]:g} sampai {band[1]:g} GHz, RL minimum <= {rl:g} dB, BW >= {T_BW:g} MHz, gain >= {T_GAIN:g} dBi.",
+           "- RL minimum: nilai S11 terendah (dB) pada sapuan frekuensi; makin negatif makin baik. Fokus rl memilih desain fisibel dengan RL minimum paling negatif (kedalaman RL = -rl_min_db)."] + [""]
 
-    md += ["## 3. Target dan hasil tercapai", ""]
-    for (r, label), (b, n_ok, cons) in best.items():
-        md += [f"### {r}: skenario {label}", ""]
-        if b is None:
-            md += [f"Tidak ada sampel yang memenuhi syarat ({label}).", ""]
-            continue
+    def target_table(b):
         bw, g, fr_, rlm = float(b.bw_mhz), float(b.gain_fr_ieee_dbi), float(b.fr_ghz), float(b.rl_min_db)
         edge = min(fr_ - band[0], band[1] - fr_) * 1000
         rows = [("fr (GHz)", f"{band[0]:g} sampai {band[1]:g}", f_(fr_, 3), f"{edge:.0f} MHz dari tepi pita terdekat", "tercapai"),
@@ -185,17 +246,52 @@ def main():
                 ("Gain IEEE (dBi)", f">= {T_GAIN:g}", f_(g, 2), f"{g - T_GAIN:+.2f} dB", "tercapai" if g >= T_GAIN else "tidak tercapai"),
                 ("Efisiensi radiasi di fr (%)", "tidak ada", f_(100 * b.get("eta_rad_fr", np.nan), 1), "", "acuan"),
                 ("Directivity di fr (dBi)", "tidak ada", f_(b.get("d_peak_fr_dbi", np.nan), 2), "", "acuan")]
-        md += [f"Desain terbaik: sampel {int(b.sample_id)} ({n_ok} sampel memenuhi syarat skenario ini).", "",
-               "| besaran | target proposal | tercapai | selisih terhadap target | status |", "|---|---|---|---|---|"]
-        md += [f"| {a} | {t} | {c} | {s} | {st} |" for a, t, c, s, st in rows]
-        md.append("")
+        return ["| besaran | target proposal | tercapai | selisih terhadap target | status |", "|---|---|---|---|---|"] + \
+               [f"| {a} | {t} | {c} | {sl} | {st} |" for a, t, c, sl, st in rows]
+
+    def yield_text(r, sid):
+        y = yields[r].get(int(sid))
+        if y is None:
+            return "tanpa data toleransi"
+        verdict = "tahan toleransi" if y[0] >= args.min_yield else f"di bawah ambang {args.min_yield:g}%, tidak tahan toleransi"
+        return f"yield toleransi {y[0]:.1f}% ({y[1]} dari {y[2]} skenario lulus; {verdict})"
+
+    md += ["## 3. Target dan hasil tercapai", ""]
+    for (r, label), (b, n_ok, cons) in best.items():
+        md += [f"### {r}: skenario {label}", ""]
+        if b is None:
+            md += [f"Tidak ada sampel yang memenuhi syarat ({label}).", ""]
+            continue
+        md += [f"Desain dengan {FOCUS_NAME[args.focus]}: sampel {int(b.sample_id)} ({n_ok} sampel memenuhi syarat skenario ini); {yield_text(r, b.sample_id)}.", ""]
+        md += target_table(b) + [""]
         df = data[r]
         okb = feasible(df, band, rl, cons)
         if okb.any():
             ib = df.loc[okb, "bw_mhz"].idxmax()
             ig = df.loc[okb, "gain_fr_ieee_dbi"].idxmax()
+            ir = df.loc[okb, "rl_min_db"].idxmin()
+            md += [f"RL terdalam pada skenario ini: {df.rl_min_db[ir]:.1f} dB (sampel {int(df.sample_id[ir])}, fr {df.fr_ghz[ir]:.3f} GHz, BW {df.bw_mhz[ir]:.1f} MHz, gain {df.gain_fr_ieee_dbi[ir]:.2f} dBi).", ""]
             md += [f"Maksimum terpisah pada skenario ini: BW {df.bw_mhz[ib]:.1f} MHz (sampel {int(df.sample_id[ib])}, gain {df.gain_fr_ieee_dbi[ib]:.2f} dBi); "
                    f"gain {df.gain_fr_ieee_dbi[ig]:.2f} dBi (sampel {int(df.sample_id[ig])}, BW {df.bw_mhz[ig]:.1f} MHz).", ""]
+            both = okb & (df.bw_mhz >= T_BW) & (df.gain_fr_ieee_dbi >= T_GAIN)
+            if both.any():
+                md += [f"Sampel yang memenuhi BW >= {T_BW:g} MHz dan gain >= {T_GAIN:g} dBi sekaligus: {int(both.sum())}.", ""]
+            else:
+                g5 = okb & (df.gain_fr_ieee_dbi >= T_GAIN)
+                if g5.any():
+                    i5 = df.loc[g5, "bw_mhz"].idxmax()
+                    tail = f" Untuk gain >= {T_GAIN:g} dBi, BW terbesar adalah {df.bw_mhz[i5]:.1f} MHz (sampel {int(df.sample_id[i5])}, gain {df.gain_fr_ieee_dbi[i5]:.2f} dBi)."
+                else:
+                    tail = f" Tidak ada sampel dengan gain >= {T_GAIN:g} dBi pada skenario ini."
+                md += [f"Tidak ada sampel yang memenuhi BW >= {T_BW:g} MHz dan gain >= {T_GAIN:g} dBi sekaligus (kedua target proposal).{tail}", ""]
+        rc = rec.get((r, label))
+        if rc is not None and int(rc.sample_id) != int(b.sample_id):
+            md += [f"**Desain rekomendasi (tahan toleransi, yield >= {args.min_yield:g}%)**: sampel {int(rc.sample_id)}; {yield_text(r, rc.sample_id)}.", ""]
+            md += target_table(rc) + [""]
+        elif rc is not None:
+            md += ["Desain ini juga memenuhi ambang toleransi, sehingga menjadi desain rekomendasi.", ""]
+        elif yields[r]:
+            md += [f"Tidak ada desain dengan data toleransi yang memenuhi ambang {args.min_yield:g}% pada skenario ini; desain rekomendasi tidak dibuat.", ""]
 
     md += ["## 4. Parameter desain terbaik", ""]
     shown = set()
@@ -207,12 +303,17 @@ def main():
         dd = mc.load_design(dn) if dn else None
         params = list(dd.params) if dd else [c for c in data[r].columns if c in ("Lp", "Wp", "LU", "WU", "gU", "PU", "LI", "LD", "WD", "gD", "PD")]
         extra = [c for c in ("hs", "Wf") if c in data[r].columns]
-        md += [f"### {r}: sampel {int(b.sample_id)} (skenario {label})", "", "| parameter | nilai (mm) |", "|---|---|"]
-        md += [f"| {p} | {float(b[p]):.3f} |" for p in params + extra]
-        sub = getattr(dd.mod, "SUBSTRATE", None) if dd else None
-        if sub:
-            md += [f"| substrat | {sub.get('material', '')}: epsilon {sub.get('er')}, tan delta {sub.get('tand')}, h {sub.get('h')} mm |"]
-        md.append("")
+        picks = [(f"desain {FOCUS_NAME[args.focus]}", b)]
+        rc = rec.get((r, label))
+        if rc is not None and int(rc.sample_id) != int(b.sample_id):
+            picks.append(("desain rekomendasi tahan toleransi", rc))
+        for role, row in picks:
+            md += [f"### {r}: sampel {int(row.sample_id)} ({role}, skenario {label})", "", "| parameter | nilai (mm) |", "|---|---|"]
+            md += [f"| {p} | {float(row[p]):.3f} |" for p in params + extra]
+            sub = getattr(dd.mod, "SUBSTRATE", None) if dd else None
+            if sub:
+                md += [f"| substrat | {sub.get('material', '')}: epsilon {sub.get('er')}, tan delta {sub.get('tand')}, h {sub.get('h')} mm |"]
+            md.append("")
 
     md += ["## 5. Kurva Pareto", "", "![Pareto](pareto.png)", "", "![Kemajuan hypervolume](pareto_progress.png)", "",
            "Hypervolume (acuan 0, 0; satuan MHz*dBi untuk BW dan %*dBi untuk cakupan; makin besar makin baik):", "",
@@ -301,7 +402,7 @@ def main():
             ax.axvline(n0 + 0.5, color="gray", ls="--", lw=0.8)
         ax.set_title(r, fontsize=10)
         ax.set_xlabel("sample_id")
-        ax.set_ylabel(f"{obj} terbaik (feasible)")
+        ax.set_ylabel(f"{OBJ_LABEL.get(obj, obj)} terbaik (feasible)")
         ax.grid(alpha=0.3)
         ax.legend(fontsize=7)
     fig.suptitle("Konvergensi (garis putus abu abu = akhir sampel awal)", fontsize=10)
@@ -313,23 +414,31 @@ def main():
         dn = designs.get(r)
         fdir = mc.load_design(dn).figures_dir if dn else os.path.join(paths.run_dir(r), "figures")
         for src, cap in (("gpr_parity.png", "Parity GPR"), ("forward_validation.png", "Validasi maju"),
-                         ("bo_backtest.png", "Backtest BO vs acak")):
+                         ("bo_backtest.png", "Backtest BO vs acak"), ("sensitivity.png", "Sensitivitas ARD dan Sobol")):
             sp = os.path.join(fdir, src)
             if os.path.exists(sp):
                 fn = f"report_{r}_{src}"
                 shutil.copyfile(sp, os.path.join(args.out_dir, fn))
                 md += [f"{cap} ({r}):", "", f"![{cap} {r}]({fn})", ""]
             else:
-                notes.append(f"{cap} ({r}): {src} belum ada di {fdir} (jalankan train, validate, atau backtest).")
+                notes.append(f"{cap} ({r}): {src} belum ada di {fdir} (jalankan train, validate, backtest, atau sensitivity).")
 
     for r in runs:
         df = data[r]
         if "fr_edge_flag" in df.columns and int(df.fr_edge_flag.sum()):
             notes.append(f"{r}: {int(df.fr_edge_flag.sum())} sampel punya fr menempel di tepi sweep; resonansi sebenarnya mungkin di luar rentang sweep.")
+    # bagian 9: pola radiasi, metrik tambahan, fase optimasi (dibaca dari berkas yang ada; gagal tidak menghentikan laporan)
+    md9 = []
+    try:
+        from cstopt.report import pattern as pt
+        md9 = pt.build(runs, data, designs, best, front_all, args.out_dir, band, rl, obj, OBJ_LABEL.get(obj, obj), mc, notes, rec=rec, focus_name=FOCUS_NAME[args.focus])
+    except Exception as e:                              # noqa: BLE001
+        notes.append(f"Bagian 9 gagal dibuat ({type(e).__name__}: {e}); bagian 1 sampai 8 tetap valid.")
     md += ["## 8. Catatan otomatis", ""]
     allnotes = warns + notes
     md += [f"- {n}" for n in allnotes] if allnotes else ["- Tidak ada peringatan."]
     md.append("")
+    md += md9
     path = os.path.join(args.out_dir, "report.md")
     with open(path, "w", encoding="utf-8") as fh:
         fh.write("\n".join(md))
